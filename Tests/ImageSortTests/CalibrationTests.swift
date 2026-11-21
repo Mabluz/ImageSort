@@ -10,14 +10,11 @@ import Vision
     func printDistancesAndScores() async throws {
         let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["IMAGESORT_CALIBRATE_DIR"]!)
         let photos = FolderScanner.scan(dir)
-        var analyses: [URL: PhotoAnalysis] = [:]
-        var prints: [URL: VNFeaturePrintObservation] = [:]
         let start = Date()
-        for p in photos {
-            let a = try await PhotoAnalyzer.analyze(url: p.url)
-            analyses[p.url] = a
-            prints[p.url] = PhotoAnalyzer.featurePrint(from: a.featurePrint)
-        }
+        // Samme parallelle kodevei som appen (uten cache), så vranglåser oppdages her.
+        let analyses = await AnalysisPipeline.run(photos, cache: nil)
+        #expect(analyses.count == photos.count)
+        let prints = analyses.compactMapValues { PhotoAnalyzer.featurePrint(from: $0.featurePrint) }
         print("Analyserte \(photos.count) bilder på \(String(format: "%.1f", Date().timeIntervalSince(start))) s")
 
         let names = photos.map { String($0.fileName.prefix(14)) }

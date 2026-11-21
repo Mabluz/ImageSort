@@ -24,10 +24,13 @@ final class ThumbnailCache: @unchecked Sendable {
     func image(for url: URL, maxPixel: Int) async -> NSImage? {
         let key = "\(maxPixel)|\(url.path)" as NSString
         if let hit = cache.object(forKey: key) { return hit }
-        let img: NSImage? = await Task.detached(priority: .userInitiated) {
-            guard let cg = ImageLoader.cgImage(url: url, maxPixel: maxPixel) else { return nil }
-            return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
-        }.value
+        // Dekoding blokkerer; kjør på GCD i stedet for Swift Concurrency sin trådpool.
+        let img: NSImage? = await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let cg = ImageLoader.cgImage(url: url, maxPixel: maxPixel)
+                cont.resume(returning: cg.map { NSImage(cgImage: $0, size: NSSize(width: $0.width, height: $0.height)) })
+            }
+        }
         if let img { cache.setObject(img, forKey: key) }
         return img
     }

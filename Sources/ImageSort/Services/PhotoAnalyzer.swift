@@ -8,7 +8,25 @@ enum AnalyzerError: Error { case cannotDecode(URL) }
 enum PhotoAnalyzer {
     static let analysisSize = 1024
 
+    /// Egen GCD-kø: Vision sine synkrone kall blokkerer tråden og må ikke kjøre på
+    /// Swift Concurrency sin begrensede trådpool (ga vranglås når alle tråder ventet på Vision).
+    private static let visionQueue = DispatchQueue(label: "imagesort.vision", qos: .userInitiated, attributes: .concurrent)
+
     static func analyze(url: URL) async throws -> PhotoAnalysis {
+        let (cg, partial) = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<(CGImage, PhotoAnalysis), Error>) in
+            visionQueue.async {
+                cont.resume(with: Result { try analyzeBlocking(url: url) })
+            }
+        }
+        var result = partial
+        if let aest = try? await CalculateImageAestheticsScoresRequest().perform(on: cg) {
+            result.aesthetics = aest.overallScore
+            result.isUtility = aest.isUtility
+        }
+        return result
+    }
+
+    private static func analyzeBlocking(url: URL) throws -> (CGImage, PhotoAnalysis) {
         guard let cg = ImageLoader.cgImage(url: url, maxPixel: analysisSize) else {
             throw AnalyzerError.cannotDecode(url)
         }
@@ -43,12 +61,7 @@ enum PhotoAnalyzer {
         }
 
         result.sharpness = Sharpness.laplacianVariance(cg)
-
-        if let aest = try? await CalculateImageAestheticsScoresRequest().perform(on: cg) {
-            result.aesthetics = aest.overallScore
-            result.isUtility = aest.isUtility
-        }
-        return result
+        return (cg, result)
     }
 
     /// Høyde/bredde-forhold for øyekonturen i piksler.

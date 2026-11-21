@@ -120,38 +120,17 @@ final class LibraryViewModel {
     }
 
     private func analyzeAll(_ list: [Photo]) async {
-        let cache = AnalysisCache.shared
-        var done = 0
-        let limit = max(2, ProcessInfo.processInfo.activeProcessorCount)
-
-        await withTaskGroup(of: (Photo, PhotoAnalysis?).self) { group in
-            var iterator = list.makeIterator()
-            func addNext() -> Bool {
-                guard let photo = iterator.next() else { return false }
-                group.addTask(priority: .utility) {
-                    if let cached = cache.get(photo) { return (photo, cached) }
-                    let a = try? await PhotoAnalyzer.analyze(url: photo.url)
-                    if let a { cache.set(a, for: photo) }
-                    return (photo, a)
-                }
-                return true
+        let total = list.count
+        let results = await AnalysisPipeline.run(list, cache: AnalysisCache.shared) { done in
+            Task { @MainActor [weak self] in
+                guard let self, case .analyzing(let current, _) = self.phase, done > current else { return }
+                self.phase = .analyzing(done: done, total: total)
             }
-            for _ in 0..<limit { if !addNext() { break } }
-            while let (photo, analysis) = await group.next() {
-                if Task.isCancelled { group.cancelAll(); return }
-                if let analysis {
-                    analyses[photo.url] = analysis
-                    if let fp = PhotoAnalyzer.featurePrint(from: analysis.featurePrint) {
-                        featurePrints[photo.url] = fp
-                    }
-                }
-                done += 1
-                if done % 8 == 0 || done == list.count {
-                    phase = .analyzing(done: done, total: list.count)
-                }
-                if done % 200 == 0 { cache.save() }
-                _ = addNext()
-            }
+        }
+        guard !Task.isCancelled else { return }
+        analyses = results
+        for (url, a) in results {
+            if let fp = PhotoAnalyzer.featurePrint(from: a.featurePrint) { featurePrints[url] = fp }
         }
     }
 

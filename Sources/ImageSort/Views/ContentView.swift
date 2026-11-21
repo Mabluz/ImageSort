@@ -23,7 +23,14 @@ struct ContentView: View {
             model.open(url)
             return true
         }
-        .onAppear { model.installKeyMonitor() }
+        .onAppear {
+            model.installKeyMonitor()
+            // `ImageSort --open /sti/til/mappe` åpner en mappe direkte (nyttig for testing).
+            let args = CommandLine.arguments
+            if model.rootURL == nil, let i = args.firstIndex(of: "--open"), i + 1 < args.count {
+                model.open(URL(fileURLWithPath: args[i + 1]))
+            }
+        }
         .onChange(of: timeGap) { model.regroup() }
         .onChange(of: threshold) { model.regroup() }
         .sheet(isPresented: $model.showPreview) {
