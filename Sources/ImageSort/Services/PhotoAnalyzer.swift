@@ -60,7 +60,9 @@ enum PhotoAnalyzer {
             }
         }
 
-        result.sharpness = Sharpness.laplacianVariance(cg)
+        // Skarphet måles på høyere oppløsning: bevegelsesuskarphet forsvinner når bildet skaleres mye ned.
+        let sharpImage = ImageLoader.cgImage(url: url, maxPixel: Sharpness.measureSize) ?? cg
+        result.sharpness = Sharpness.focusSharpness(sharpImage)
         return (cg, result)
     }
 
@@ -81,6 +83,56 @@ enum PhotoAnalyzer {
 }
 
 enum Sharpness {
+    static let measureSize = 2048
+
+    /// Skarphet i den skarpeste delen av bildet: Laplace-varians per rute i et 6×6-rutenett,
+    /// snitt av de 3 skarpeste rutene. Et portrett med skarpt ansikt og uskarp bakgrunn regnes som skarpt.
+    static func focusSharpness(_ image: CGImage) -> Double {
+        guard let (pixels, w, h) = grayscale(image, maxSide: Double(measureSize)) else { return 0 }
+        return focusSharpness(gray: pixels, width: w, height: h)
+    }
+
+    static func focusSharpness(gray p: [UInt8], width w: Int, height h: Int, grid: Int = 6, top: Int = 3) -> Double {
+        let tw = w / grid, th = h / grid
+        guard tw >= 3, th >= 3 else { return laplacianVariance(gray: p, width: w, height: h) }
+        var tiles: [Double] = []
+        for ty in 0..<grid {
+            for tx in 0..<grid {
+                var sum = 0.0, sumSq = 0.0, n = 0.0
+                let y0 = max(1, ty * th), y1 = min(h - 1, (ty + 1) * th)
+                let x0 = max(1, tx * tw), x1 = min(w - 1, (tx + 1) * tw)
+                for y in y0..<y1 {
+                    let row = y * w
+                    for x in x0..<x1 {
+                        let i = row + x
+                        let v = Double(p[i - w]) + Double(p[i + w]) + Double(p[i - 1]) + Double(p[i + 1]) - 4 * Double(p[i])
+                        sum += v; sumSq += v * v; n += 1
+                    }
+                }
+                if n > 0 { let m = sum / n; tiles.append(sumSq / n - m * m) }
+            }
+        }
+        let best = tiles.sorted(by: >).prefix(top)
+        return best.isEmpty ? 0 : best.reduce(0, +) / Double(best.count)
+    }
+
+    static func grayscale(_ image: CGImage, maxSide: Double) -> ([UInt8], Int, Int)? {
+        let scale = min(1, maxSide / Double(max(image.width, image.height)))
+        let w = max(3, Int(Double(image.width) * scale))
+        let h = max(3, Int(Double(image.height) * scale))
+        var pixels = [UInt8](repeating: 0, count: w * h)
+        let ok: Bool = pixels.withUnsafeMutableBytes { buf in
+            guard let ctx = CGContext(
+                data: buf.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w,
+                space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+            ) else { return false }
+            ctx.interpolationQuality = .medium
+            ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        return ok ? (pixels, w, h) : nil
+    }
+
     /// Varians av Laplace-filter på et 512px gråtonebilde.
     static func laplacianVariance(_ image: CGImage) -> Double {
         let maxSide = 512.0

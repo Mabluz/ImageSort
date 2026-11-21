@@ -34,7 +34,8 @@ final class AnalysisCache: @unchecked Sendable {
 
     func get(_ photo: Photo) -> PhotoAnalysis? {
         lock.lock(); defer { lock.unlock() }
-        return entries[Self.key(for: photo)]
+        guard let e = entries[Self.key(for: photo)], e.version == PhotoAnalysis.currentVersion else { return nil }
+        return e
     }
 
     func set(_ analysis: PhotoAnalysis, for photo: Photo) {

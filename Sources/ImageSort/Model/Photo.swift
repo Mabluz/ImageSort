@@ -13,6 +13,9 @@ struct Photo: Identifiable, Hashable, Sendable {
 
 /// Rå analyse av ett bilde (lagres i cache).
 struct PhotoAnalysis: Codable, Hashable, Sendable {
+    /// Øk når analysen endres, så gamle cache-oppføringer analyseres på nytt.
+    static let currentVersion = 2
+    var version: Int? = PhotoAnalysis.currentVersion
     /// Arkivert VNFeaturePrintObservation.
     var featurePrint: Data?
     /// Apple estetikk-score, -1...1.
@@ -39,8 +42,10 @@ enum GroupStatus: String, Sendable {
 enum GroupKind: Sendable {
     /// Serie med like bilder: velg det beste, resten kan slettes.
     case series
-    /// Enkeltbilder (per måned): bare bla og merke til samling, aldri slette.
+    /// Enkeltbilder (per måned): bla, merke til samling og slette enkeltvis.
     case singles
+    /// Enkeltbilder som sannsynligvis er dårlige (uskarpe osv.). Valgte beholdes, resten kan slettes.
+    case junk
 }
 
 /// En serie like bilder.
@@ -57,7 +62,7 @@ struct PhotoGroup: Identifiable, Sendable {
     var title: String?
 
     /// Kan man velge/slette i denne gruppen?
-    var isReviewable: Bool { kind == .series && status == .pending }
+    var isReviewable: Bool { kind != .singles && status == .pending }
 
     var date: Date { photos.first?.captureDate ?? .distantPast }
     var totalBytes: Int64 { photos.reduce(0) { $0 + $1.fileSize } }

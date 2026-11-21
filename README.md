@@ -10,6 +10,8 @@ En Mac-app for å rydde i bilder fort. Når du har tatt 5–10 bilder av samme m
 3. I hver gruppe er det beste bildet allerede valgt (⭐ *Forslag*). Juster om du vil, og trykk **Enter**.
 4. Er du usikker, trykker du **C** for å la Claude vurdere gruppen (se under).
 
+Enkeltbilder som ser **uskarpe**, svake, ut som skjermbilder/dokumenter eller der alle har **lukkede øyne**, samles i **⚠️ Sannsynligvis dårlige**. Der er ingenting valgt: trykk mellomrom på de du vil beholde og Enter for å slette resten (du får alltid spørsmål først). Grensen for uskarphet justeres i Innstillinger.
+
 Bilder som ikke ligner noen andre, ligger under **Enkeltbilder** i sidefeltet, delt opp per måned. Der kan du bla, se i fullskjerm og merke bilder til en samling med K. Med ⌫ eller 🗑 sletter du ett og ett bilde (⌘Z angrer).
 
 Analysene lagres, så det går mye raskere neste gang samme mappe åpnes.

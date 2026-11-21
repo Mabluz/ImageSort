@@ -56,22 +56,38 @@ import ImageIO
         #expect(CGImageDestinationFinalize(dest))
     }
 
-    @Test @MainActor func trashAndUndoSinglePhoto() async throws {
+    /// Lager bilder og legger inn kjente analyseverdier i cachen, så testen ikke avhenger av Vision.
+    private func makeLibrary(_ files: [(String, Double)]) throws -> URL {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("imagesort-single-\(UUID())")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
-        // Ulike måneder (fra filnavn) => egne enkeltbilde-grupper.
-        let a = dir.appendingPathComponent("20261001_120000.jpg")
-        let b = dir.appendingPathComponent("20261101_120000.jpg")
-        let c = dir.appendingPathComponent("20261102_120000.jpg")
-        try writeJPEG(a, pattern: 0); try writeJPEG(b, pattern: 1); try writeJPEG(c, pattern: 2)
+        for (i, f) in files.enumerated() { try writeJPEG(dir.appendingPathComponent(f.0), pattern: i % 3) }
+        let sharpness = Dictionary(uniqueKeysWithValues: files)
+        for p in FolderScanner.scan(dir) {
+            AnalysisCache.shared.set(PhotoAnalysis(aesthetics: 0.3, sharpness: sharpness[p.fileName]!), for: p)
+        }
+        return dir
+    }
 
+    @MainActor private func openAndWait(_ dir: URL) async throws -> LibraryViewModel {
         let vm = LibraryViewModel()
         vm.open(dir)
         for _ in 0..<200 where vm.phase != .ready { try await Task.sleep(for: .milliseconds(50)) }
         #expect(vm.phase == .ready)
+        return vm
+    }
+
+    @Test @MainActor func trashAndUndoSinglePhoto() async throws {
+        // Ulike måneder (fra filnavn) => egne enkeltbilde-grupper. Alle skarpe.
+        let dir = try makeLibrary([("20261001_120000.jpg", 500), ("20261101_120000.jpg", 500), ("20261102_120000.jpg", 500)])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let a = dir.appendingPathComponent("20261001_120000.jpg")
+        let b = dir.appendingPathComponent("20261101_120000.jpg")
+        let c = dir.appendingPathComponent("20261102_120000.jpg")
+
+        let vm = try await openAndWait(dir)
         #expect(vm.singleCount == 3)
         #expect(vm.pendingGroups.isEmpty)
+        #expect(vm.junkGroups.isEmpty)
 
         // Slett b i november-gruppen.
         let nov = try #require(vm.singleGroups.first { $0.photos.count == 2 })
@@ -96,5 +112,35 @@ import ImageIO
         #expect(FileManager.default.fileExists(atPath: a.path))
         #expect(vm.singleGroups.count == 2)
         #expect(vm.selectedGroup?.photos.map(\.fileName) == [a.lastPathComponent])
+    }
+
+    @Test @MainActor func likelyBadGroupKeepsSelectedAndTrashesRest() async throws {
+        let dir = try makeLibrary([("20261001_120000.jpg", 40), ("20261002_120000.jpg", 60), ("20261003_120000.jpg", 500)])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let blurry1 = dir.appendingPathComponent("20261001_120000.jpg")
+        let blurry2 = dir.appendingPathComponent("20261002_120000.jpg")
+
+        let vm = try await openAndWait(dir)
+        let junk = try #require(vm.junkGroups.first)
+        #expect(junk.photos.map(\.fileName) == [blurry1.lastPathComponent, blurry2.lastPathComponent])
+        #expect(junk.selected.isEmpty, "ingenting beholdes før brukeren velger")
+        #expect(junk.scores[junk.photos[0].url]?.reasons.contains("uskarpt") == true)
+        #expect(vm.singleCount == 1)
+        #expect(vm.pendingGroups.isEmpty, "listen skal ikke vises som serie")
+
+        // Behold det ene, slett resten (krever alltid bekreftelse).
+        vm.select(group: junk.id)
+        vm.toggle(junk.photos[1].url)
+        vm.requestConfirm()
+        let pending = try #require(vm.pendingConfirmGroupID)
+        vm.confirm(groupID: pending)
+        #expect(!FileManager.default.fileExists(atPath: blurry1.path))
+        #expect(FileManager.default.fileExists(atPath: blurry2.path))
+        #expect(vm.junkGroups.isEmpty)
+        #expect(vm.singleCount == 2, "det beholdte bildet går tilbake til måneden sin")
+
+        vm.undo()
+        #expect(FileManager.default.fileExists(atPath: blurry1.path))
+        #expect(vm.junkGroups.first?.photos.map(\.fileName) == [blurry1.lastPathComponent])
     }
 }

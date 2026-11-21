@@ -8,6 +8,7 @@ enum Settings {
     static let claudeModelKey = "claudeModel"
     static let preselectKey = "preselectBest"
     static let confirmedOnceKey = "confirmedTrashOnce"
+    static let blurKey = "blurThreshold"
     static let collectionKey = "activeCollectionPath"
     static let recentCollectionsKey = "recentCollectionPaths"
 
@@ -22,6 +23,7 @@ enum Settings {
             thresholdKey: defaultThreshold,
             claudeModelKey: defaultModel,
             preselectKey: true,
+            blurKey: Ranking.defaultBlurThreshold,
             confirmedOnceKey: false,
         ])
     }
@@ -76,6 +78,7 @@ final class LibraryViewModel {
     var collectionName: String? { collectionURL?.lastPathComponent }
 
     init() {
+        Settings.register()
         let d = UserDefaults.standard
         recentCollections = (d.stringArray(forKey: Settings.recentCollectionsKey) ?? [])
             .map { URL(fileURLWithPath: $0) }
@@ -87,11 +90,14 @@ final class LibraryViewModel {
     }
 
     var canUndo: Bool { !undoStack.isEmpty }
-    var pendingGroups: [PhotoGroup] { groups.filter(\.isReviewable) }
+    var pendingGroups: [PhotoGroup] { groups.filter { $0.kind == .series && $0.isReviewable } }
     var finishedGroups: [PhotoGroup] { groups.filter { $0.kind == .series && $0.status != .pending } }
     var singleGroups: [PhotoGroup] { groups.filter { $0.kind == .singles } }
+    var junkGroups: [PhotoGroup] { groups.filter { $0.kind == .junk } }
     /// Samme rekkefølge som i sidefeltet (brukes av ↑↓).
-    var sidebarOrder: [PhotoGroup] { pendingGroups + singleGroups + finishedGroups }
+    var sidebarOrder: [PhotoGroup] { pendingGroups + junkGroups + singleGroups + finishedGroups }
+    /// Bilder brukeren har valgt å beholde fra «Sannsynligvis dårlige» (foreslås ikke igjen).
+    private var junkOverride: Set<URL> = []
     var singleCount: Int { singleGroups.reduce(0) { $0 + $1.photos.count } }
 
     var selectedGroup: PhotoGroup? {
@@ -182,11 +188,12 @@ final class LibraryViewModel {
         let kept = groups.filter { $0.kind == .series && $0.status != .pending }
         let series = kept + fresh
         let inSeries = Set(series.flatMap { $0.photos.map(\.url) })
-        let singles = Self.singleGroups(photos.filter { !inSeries.contains($0.url) })
+        let singles = buildSingles(photos.filter { !inSeries.contains($0.url) })
         let previous = selectedGroup
         groups = (series + singles).sorted { $0.date < $1.date }
         // Behold valgt enkeltbilde-måned hvis mulig, ellers første uferdige serie.
-        if let previous, previous.kind == .singles, let same = singleGroups.first(where: { $0.title == previous.title }) {
+        if let previous, previous.kind != .series,
+           let same = groups.first(where: { $0.kind == previous.kind && $0.title == previous.title }) {
             selectedGroupID = same.id
         } else if selectedGroup == nil || selectedGroup?.isReviewable != true {
             selectedGroupID = (pendingGroups.first ?? sidebarOrder.first)?.id
@@ -200,6 +207,32 @@ final class LibraryViewModel {
         f.dateFormat = "LLLL yyyy"
         return f
     }()
+
+    /// Enkeltbilder: sannsynlig dårlige samles i egen gruppe, resten deles per måned. Alle får fast-skala score.
+    private func buildSingles(_ list: [Photo]) -> [PhotoGroup] {
+        let blur = UserDefaults.standard.double(forKey: Settings.blurKey)
+        let previousKeep = junkGroups.first?.selected ?? []
+        var junk: [Photo] = [], normal: [Photo] = []
+        var scores: [URL: PhotoScore] = [:]
+        for p in list {
+            guard let a = analyses[p.url] else { normal.append(p); continue }
+            let r = Ranking.singleAssessment(a, blurThreshold: blur)
+            scores[p.url] = r.score
+            if r.isJunk && !junkOverride.contains(p.url) { junk.append(p) } else { normal.append(p) }
+        }
+        var result = Self.singleGroups(normal)
+        if !junk.isEmpty {
+            var g = PhotoGroup(photos: junk.sorted { $0.captureDate < $1.captureDate })
+            g.kind = .junk
+            g.title = "Sannsynligvis dårlige"
+            g.selected = previousKeep.intersection(junk.map(\.url))
+            result.append(g)
+        }
+        for i in result.indices {
+            for p in result[i].photos { result[i].scores[p.url] = scores[p.url] }
+        }
+        return result
+    }
 
     /// Deler enkeltbilder opp per måned.
     static func singleGroups(_ photos: [Photo]) -> [PhotoGroup] {
@@ -364,6 +397,11 @@ final class LibraryViewModel {
     /// Kalles fra Enter / knapp. Viser bekreftelse første gang.
     func requestConfirm() {
         guard let g = selectedGroup, g.isReviewable else { return }
+        if g.kind == .junk {
+            // Mange bilder på en gang: spør alltid.
+            if g.selected.count < g.photos.count { pendingConfirmGroupID = g.id }
+            return
+        }
         if g.selected.isEmpty {
             pendingDeleteAllGroupID = g.id
             return
@@ -394,11 +432,29 @@ final class LibraryViewModel {
         if !result.failed.isEmpty {
             errorMessage = "Kunne ikke flytte \(result.failed.count) bilde(r) til Papirkurven: \(result.failed[0].1.localizedDescription)"
         }
+        if g.kind == .junk {
+            // De som ble beholdt går tilbake til månedene sine og foreslås ikke igjen.
+            junkOverride.formUnion(groups[i].photos.map(\.url))
+            groups.remove(at: i)
+            rebuildSingles()
+            select(group: (pendingGroups.first ?? sidebarOrder.first)?.id)
+            return
+        }
         advance(from: i)
     }
 
+    /// Tekst til bekreftelsesdialogen.
+    var confirmMessage: String {
+        guard let g = groups.first(where: { $0.id == pendingConfirmGroupID }) else { return "" }
+        let n = g.photos.count - g.selected.count
+        if g.kind == .junk {
+            return "\(n) bilde(r) flyttes til Papirkurven, og \(g.selected.count) beholdes. Du kan hente dem tilbake fra Papirkurven eller trykke ⌘Z."
+        }
+        return "Bildene du ikke har valgt, flyttes til Papirkurven, så du kan hente dem tilbake. Du får bare dette spørsmålet én gang. Trykk ⌘Z for å angre."
+    }
+
     func skip() {
-        guard let i = selectedIndex, groups[i].isReviewable else { return }
+        guard let i = selectedIndex, groups[i].isReviewable, groups[i].kind == .series else { return }
         groups[i].status = .skipped
         reviewed.formUnion(groups[i].photos.map(\.url))
         undoStack.append(UndoRecord(groupID: groups[i].id, items: [], previousStatus: .pending))
@@ -471,7 +527,7 @@ final class LibraryViewModel {
     private func rebuildSingles() {
         let series = groups.filter { $0.kind == .series }
         let inSeries = Set(series.flatMap { $0.photos.map(\.url) })
-        let singles = Self.singleGroups(photos.filter { !inSeries.contains($0.url) })
+        let singles = buildSingles(photos.filter { !inSeries.contains($0.url) })
         groups = (series + singles).sorted { $0.date < $1.date }
     }
 
@@ -486,7 +542,7 @@ final class LibraryViewModel {
     // MARK: - Claude
 
     func askClaude() {
-        guard let g = selectedGroup, g.isReviewable, !claudeBusy.contains(g.id) else { return }
+        guard let g = selectedGroup, g.isReviewable, g.kind == .series, !claudeBusy.contains(g.id) else { return }
         let id = g.id
         // Store grupper: send de beste lokalt rangerte, men i samme rekkefølge som i appen.
         let top = Set(g.photos.sorted { (g.scores[$0.url]?.total ?? 0) > (g.scores[$1.url]?.total ?? 0) }

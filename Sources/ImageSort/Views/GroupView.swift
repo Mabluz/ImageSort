@@ -169,7 +169,7 @@ struct PhotoCell: View {
 
     @ViewBuilder private var selectionMark: some View {
         HStack(spacing: 6) {
-            if isFocused || group.kind == .singles {
+            if isFocused || group.kind != .series {
                 Button {
                     model.focusedIndex = index
                     model.trashFocused()
@@ -225,6 +225,28 @@ struct ActionBar: View {
                           systemImage: "info.circle")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                } else if group.kind == .junk {
+                    let discard = group.photos.count - group.selected.count
+                    Button {
+                        model.requestConfirm()
+                    } label: {
+                        Label(group.selected.isEmpty ? "Slett alle \(discard)" : "Slett \(discard), behold \(group.selected.count)",
+                              systemImage: "trash")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(discard == 0)
+                    .help("Enter")
+
+                    Button { model.openViewer() } label: {
+                        Label("Full visning", systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                    .help("F")
+
+                    Label("Bildene her ser uskarpe eller dårlige ut. Trykk mellomrom på de du vil beholde.",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
                 } else if group.status == .pending {
                     let discard = group.photos.count - group.selected.count
                     Button {

@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage(Settings.thresholdKey) private var threshold = Settings.defaultThreshold
     @AppStorage(Settings.claudeModelKey) private var claudeModel = Settings.defaultModel
     @AppStorage(Settings.preselectKey) private var preselect = true
+    @AppStorage(Settings.blurKey) private var blur = Ranking.defaultBlurThreshold
     @State private var claudeStatus: Bool?
 
     var body: some View {
@@ -27,6 +28,18 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Velg det foreslåtte bildet automatisk", isOn: $preselect)
+            }
+
+            Section("Enkeltbilder") {
+                LabeledContent("Uskarphet") {
+                    VStack(alignment: .leading) {
+                        Slider(value: $blur, in: 40...300, step: 10) {
+                            EmptyView()
+                        } minimumValueLabel: { Text("Mild").font(.caption) } maximumValueLabel: { Text("Streng").font(.caption) }
+                        Text("Enkeltbilder med skarphet under \(Int(blur)) havner i «Sannsynligvis dårlige». Strengere gir flere forslag.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
 
             Section("Claude") {

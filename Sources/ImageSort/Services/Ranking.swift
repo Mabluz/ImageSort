@@ -2,6 +2,34 @@ import Foundation
 
 /// Gjør rå analyser om til gruppe-relative scorer 0–100.
 enum Ranking {
+    /// Under denne skarpheten regnes et bilde som uskarpt (kalibrert på ekte bilder: tydelig uskarpe 56–138, skarpe 300+).
+    static let defaultBlurThreshold = 140.0
+
+    /// Vurdering av et enkeltbilde på fast skala (ikke relativt til en gruppe).
+    static func singleAssessment(_ a: PhotoAnalysis, blurThreshold: Double) -> (score: PhotoScore, isJunk: Bool) {
+        var reasons: [String] = []
+        var junk = false
+        if a.sharpness < blurThreshold {
+            reasons.append("uskarpt"); junk = true
+        } else if a.sharpness < blurThreshold * 1.6 {
+            reasons.append("litt uskarpt")
+        }
+        if let aest = a.aesthetics, aest < -0.3 {
+            reasons.append("svak kvalitet"); junk = true
+        }
+        if a.isUtility {
+            reasons.append("skjermbilde/dokument?"); junk = true
+        }
+        if a.eyesClosedCount > 0 {
+            reasons.append("øyne lukket")
+            if a.eyesClosedCount >= max(1, a.faceQualities.count) { junk = true }
+        }
+        let aestNorm = a.aesthetics.map { (Double($0) + 1) / 2 } ?? 0.5
+        let sharpNorm = min(1, a.sharpness / (blurThreshold * 3))
+        let total = 100 * (0.5 * aestNorm + 0.5 * sharpNorm) - 20 * Double(a.eyesClosedCount)
+        return (PhotoScore(total: min(100, max(0, total)), reasons: reasons), junk)
+    }
+
     static func score(_ items: [PhotoAnalysis]) -> [PhotoScore] {
         guard !items.isEmpty else { return [] }
         let maxSharp = items.map(\.sharpness).max() ?? 0

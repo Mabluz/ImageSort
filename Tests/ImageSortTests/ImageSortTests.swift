@@ -227,3 +227,40 @@ import Foundation
         #expect(groups.allSatisfy { $0.kind == .singles && !$0.isReviewable })
     }
 }
+
+@Suite struct SingleAssessmentTests {
+    @Test func blurryIsJunk() {
+        let r = Ranking.singleAssessment(PhotoAnalysis(aesthetics: 0.3, sharpness: 50), blurThreshold: 110)
+        #expect(r.isJunk)
+        #expect(r.score.reasons == ["uskarpt"])
+    }
+
+    @Test func slightlyBlurryIsOnlyLabelled() {
+        let r = Ranking.singleAssessment(PhotoAnalysis(aesthetics: 0.3, sharpness: 150), blurThreshold: 110)
+        #expect(!r.isJunk)
+        #expect(r.score.reasons == ["litt uskarpt"])
+    }
+
+    @Test func otherJunkSignals() {
+        #expect(Ranking.singleAssessment(PhotoAnalysis(aesthetics: -0.6, sharpness: 500), blurThreshold: 110).isJunk)
+        #expect(Ranking.singleAssessment(PhotoAnalysis(aesthetics: 0.3, isUtility: true, sharpness: 500), blurThreshold: 110).isJunk)
+        // Én av to har lukkede øyne: merkes, men er ikke søppel.
+        let partly = Ranking.singleAssessment(PhotoAnalysis(aesthetics: 0.3, sharpness: 500, faceQualities: [0.5, 0.5], eyesClosedCount: 1), blurThreshold: 110)
+        #expect(!partly.isJunk && partly.score.reasons.contains("øyne lukket"))
+        let all = Ranking.singleAssessment(PhotoAnalysis(aesthetics: 0.3, sharpness: 500, faceQualities: [0.5], eyesClosedCount: 1), blurThreshold: 110)
+        #expect(all.isJunk)
+    }
+
+    @Test func sharpPhotoIsFine() {
+        let r = Ranking.singleAssessment(PhotoAnalysis(aesthetics: 0.4, sharpness: 800), blurThreshold: 110)
+        #expect(!r.isJunk && r.score.reasons.isEmpty && r.score.total > 60)
+    }
+
+    @Test func focusSharpnessFindsSharpRegion() {
+        // Flat bilde med ett skarpt felt i ett hjørne: fokus-skarphet skal bli høy, hel-bilde-varians lav.
+        let w = 120, h = 120
+        var px = [UInt8](repeating: 128, count: w * h)
+        for y in 0..<20 { for x in 0..<20 where (x + y) % 2 == 0 { px[y * w + x] = 255 } }
+        #expect(Sharpness.focusSharpness(gray: px, width: w, height: h) > 5 * Sharpness.laplacianVariance(gray: px, width: w, height: h))
+    }
+}

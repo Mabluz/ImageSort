@@ -4,6 +4,7 @@ struct ContentView: View {
     @Environment(LibraryViewModel.self) private var model
     @AppStorage(Settings.timeGapKey) private var timeGap = Settings.defaultTimeGap
     @AppStorage(Settings.thresholdKey) private var threshold = Settings.defaultThreshold
+    @AppStorage(Settings.blurKey) private var blur = Ranking.defaultBlurThreshold
 
     var body: some View {
         @Bindable var model = model
@@ -34,8 +35,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refreshCollection()
         }
-        .onChange(of: timeGap) { model.regroup() }
-        .onChange(of: threshold) { model.regroup() }
+        .onChange(of: [timeGap, threshold, blur]) { model.regroup() }
         .overlay {
             if model.showPreview {
                 ViewerView()
@@ -43,39 +43,7 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: model.showPreview)
-        .alert("Flytte uvalgte bilder til Papirkurven?", isPresented: Binding(
-            get: { model.pendingConfirmGroupID != nil },
-            set: { if !$0 { model.pendingConfirmGroupID = nil } }
-        )) {
-            Button("Flytt til Papirkurven") {
-                if let id = model.pendingConfirmGroupID { model.confirm(groupID: id) }
-                model.pendingConfirmGroupID = nil
-            }
-            .keyboardShortcut(.defaultAction)
-            Button("Avbryt", role: .cancel) { model.pendingConfirmGroupID = nil }
-        } message: {
-            Text("Bildene du ikke har valgt, flyttes til Papirkurven, så du kan hente dem tilbake. Du får bare dette spørsmålet én gang. Trykk ⌘Z for å angre.")
-        }
-        .alert("Ingen bilder er valgt", isPresented: Binding(
-            get: { model.pendingDeleteAllGroupID != nil },
-            set: { if !$0 { model.pendingDeleteAllGroupID = nil } }
-        )) {
-            Button("Flytt alle til Papirkurven", role: .destructive) {
-                if let id = model.pendingDeleteAllGroupID { model.confirm(groupID: id) }
-                model.pendingDeleteAllGroupID = nil
-            }
-            Button("Avbryt", role: .cancel) { model.pendingDeleteAllGroupID = nil }
-        } message: {
-            Text("Vil du virkelig flytte hele gruppen til Papirkurven?")
-        }
-        .alert("Noe gikk galt", isPresented: Binding(
-            get: { model.errorMessage != nil },
-            set: { if !$0 { model.errorMessage = nil } }
-        )) {
-            Button("OK") { model.errorMessage = nil }
-        } message: {
-            Text(model.errorMessage ?? "")
-        }
+        .modifier(AlertsModifier())
     }
 
     private var subtitle: String {
@@ -120,8 +88,9 @@ struct SidebarView: View {
                     ForEach(model.pendingGroups) { GroupRow(group: $0).tag($0.id) }
                 }
             }
-            if !model.singleGroups.isEmpty {
-                Section("Enkeltbilder (\(model.singleCount))") {
+            if !model.singleGroups.isEmpty || !model.junkGroups.isEmpty {
+                Section("Enkeltbilder (\(model.singleCount + model.junkGroups.reduce(0) { $0 + $1.photos.count }))") {
+                    ForEach(model.junkGroups) { GroupRow(group: $0).tag($0.id) }
                     ForEach(model.singleGroups) { GroupRow(group: $0).tag($0.id) }
                 }
             }
@@ -144,7 +113,7 @@ struct GroupRow: View {
                 .frame(width: 48, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 2) {
-                if group.kind == .singles, let title = group.title {
+                if group.kind != .series, let title = group.title {
                     Text(title.prefix(1).uppercased() + title.dropFirst()).font(.callout)
                 } else {
                     Text(group.date, format: .dateTime.day().month(.abbreviated).year().hour().minute())
@@ -153,6 +122,9 @@ struct GroupRow: View {
                 Text(caption).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+            if group.kind == .junk {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            }
             switch group.status {
             case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             case .skipped: Image(systemName: "forward.fill").foregroundStyle(.secondary)
@@ -164,6 +136,7 @@ struct GroupRow: View {
 
     private var caption: String {
         if group.kind == .singles { return "\(group.photos.count) enkeltbilder" }
+        if group.kind == .junk { return "\(group.photos.count) bilder å se over" }
         switch group.status {
         case .pending: return "\(group.photos.count) bilder"
         case .done: return "beholdt \(group.photos.count)"
@@ -260,5 +233,47 @@ struct CollectionMenu: View {
             }
         }
         .help("Merk bilder med K for å kopiere dem til samlingen (f.eks. til kalender eller fotobok)")
+    }
+}
+
+/// Bekreftelser og feilmeldinger (egen modifier så ContentView holder seg enkel for kompilatoren).
+struct AlertsModifier: ViewModifier {
+    @Environment(LibraryViewModel.self) private var model
+
+    func body(content: Content) -> some View {
+        content
+            .alert("Flytte uvalgte bilder til Papirkurven?", isPresented: Binding(
+                get: { model.pendingConfirmGroupID != nil },
+                set: { if !$0 { model.pendingConfirmGroupID = nil } }
+            )) {
+                Button("Flytt til Papirkurven") {
+                    if let id = model.pendingConfirmGroupID { model.confirm(groupID: id) }
+                    model.pendingConfirmGroupID = nil
+                }
+                .keyboardShortcut(.defaultAction)
+                Button("Avbryt", role: .cancel) { model.pendingConfirmGroupID = nil }
+            } message: {
+                Text(model.confirmMessage)
+            }
+            .alert("Ingen bilder er valgt", isPresented: Binding(
+                get: { model.pendingDeleteAllGroupID != nil },
+                set: { if !$0 { model.pendingDeleteAllGroupID = nil } }
+            )) {
+                Button("Flytt alle til Papirkurven", role: .destructive) {
+                    if let id = model.pendingDeleteAllGroupID { model.confirm(groupID: id) }
+                    model.pendingDeleteAllGroupID = nil
+                }
+                Button("Avbryt", role: .cancel) { model.pendingDeleteAllGroupID = nil }
+            } message: {
+                Text("Vil du virkelig flytte hele gruppen til Papirkurven?")
+            }
+            .alert("Noe gikk galt", isPresented: Binding(
+                get: { model.errorMessage != nil },
+                set: { if !$0 { model.errorMessage = nil } }
+            )) {
+                Button("OK") { model.errorMessage = nil }
+            } message: {
+                Text(model.errorMessage ?? "")
+            }
     }
 }
