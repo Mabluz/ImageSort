@@ -36,6 +36,13 @@ enum GroupStatus: String, Sendable {
     case pending, done, skipped
 }
 
+enum GroupKind: Sendable {
+    /// Serie med like bilder: velg det beste, resten kan slettes.
+    case series
+    /// Enkeltbilder (per måned): bare bla og merke til samling, aldri slette.
+    case singles
+}
+
 /// En serie like bilder.
 struct PhotoGroup: Identifiable, Sendable {
     let id = UUID()
@@ -46,6 +53,11 @@ struct PhotoGroup: Identifiable, Sendable {
     var status: GroupStatus = .pending
     var claudePick: URL?
     var claudeComment: String?
+    var kind: GroupKind = .series
+    var title: String?
+
+    /// Kan man velge/slette i denne gruppen?
+    var isReviewable: Bool { kind == .series && status == .pending }
 
     var date: Date { photos.first?.captureDate ?? .distantPast }
     var totalBytes: Int64 { photos.reduce(0) { $0 + $1.fileSize } }

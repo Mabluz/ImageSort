@@ -62,7 +62,7 @@ struct ViewerView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text("Bilde \(index + 1) av \(group.photos.count)").font(.headline)
-                    if model.viewerOnlySelected {
+                    if model.viewerOnlySelected && group.isReviewable {
                         let sel = group.photos.indices.filter { group.selected.contains(group.photos[$0].url) }
                         if let pos = sel.firstIndex(of: index) {
                             Text("· valgt \(pos + 1) av \(sel.count)").font(.headline).foregroundStyle(.green)
@@ -78,12 +78,14 @@ struct ViewerView: View {
             }
             Spacer()
 
-            Toggle(isOn: Binding(get: { model.viewerOnlySelected }, set: { model.viewerOnlySelected = $0 })) {
-                Label("Kun valgte", systemImage: "checkmark.circle")
+            if group.isReviewable {
+                Toggle(isOn: Binding(get: { model.viewerOnlySelected }, set: { model.viewerOnlySelected = $0 })) {
+                    Label("Kun valgte", systemImage: "checkmark.circle")
+                }
+                .toggleStyle(.button)
+                .tint(.green)
+                .help("V – piltastene hopper bare mellom bildene du har valgt å beholde")
             }
-            .toggleStyle(.button)
-            .tint(.green)
-            .help("V – piltastene hopper bare mellom bildene du har valgt å beholde")
 
             HStack(spacing: 4) {
                 Button { model.zoom(.zoomOut) } label: { Image(systemName: "minus.magnifyingglass") }.help("Zoom ut (−)")
@@ -104,7 +106,7 @@ struct ViewerView: View {
             .tint(inCollection ? .orange : .gray)
             .help("K – kopier bildet til samlingen (navn: samling_dato_filnavn)")
 
-            if group.status == .pending {
+            if group.isReviewable {
                 Button {
                     model.toggle(photo.url)
                 } label: {
@@ -131,7 +133,7 @@ struct ViewerView: View {
 
     private func navButtons(group: PhotoGroup, index: Int) -> some View {
         let count = group.photos.count
-        let onlySel = model.viewerOnlySelected
+        let onlySel = model.viewerOnlySelected && group.isReviewable
             && LibraryViewModel.nextSelectedIndex(from: index, delta: 1, selected: group.photos.map { group.selected.contains($0.url) }) != nil
         return HStack {
             navButton("chevron.left", enabled: onlySel || index > 0) { model.moveFocus(-1) }
@@ -164,11 +166,11 @@ struct ViewerView: View {
                             ThumbnailView(url: p.url, maxPixel: 240)
                                 .frame(width: 96, height: 72)
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .opacity(group.status == .pending && !sel ? 0.4 : 1)
+                                .opacity(group.isReviewable && !sel ? 0.4 : 1)
                                 .overlay(RoundedRectangle(cornerRadius: 6)
                                     .strokeBorder(i == index ? Color.white : (sel ? .green : .clear), lineWidth: i == index ? 3 : 2))
                                 .overlay(alignment: .topTrailing) {
-                                    if sel && group.status == .pending {
+                                    if sel && group.isReviewable {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(.white, .green).padding(3)
                                     }
@@ -200,7 +202,7 @@ struct ViewerView: View {
                 Text("←→ bla · V kun valgte · mellomrom behold/ikke · K samling · +/− zoom · 0 tilpass · dobbeltklikk 100 % · ↩ bekreft og neste gruppe · Esc lukk")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                if group.status == .pending {
+                if group.isReviewable {
                     let discard = group.photos.count - group.selected.count
                     Button {
                         model.requestConfirm()

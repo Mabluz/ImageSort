@@ -197,3 +197,20 @@ import Foundation
         #expect(LibraryViewModel.nextSelectedIndex(from: 0, delta: 1, selected: [false, false]) == nil)
     }
 }
+
+@Suite struct SingleGroupsTests {
+    private func photo(_ name: String, _ y: Int, _ m: Int, _ d: Int) -> Photo {
+        let date = Calendar.current.date(from: DateComponents(year: y, month: m, day: d, hour: 12))!
+        return Photo(url: URL(fileURLWithPath: "/\(name).jpg"), captureDate: date, fileSize: 1, modificationDate: date)
+    }
+
+    @Test @MainActor func splitsPerMonthSortedAndNeverReviewable() {
+        let groups = LibraryViewModel.singleGroups([
+            photo("c", 2026, 11, 20), photo("a", 2026, 10, 3), photo("b", 2026, 11, 2),
+        ]).sorted { $0.date < $1.date }
+        #expect(groups.count == 2)
+        #expect(groups[0].title == "oktober 2026")
+        #expect(groups[1].photos.map(\.fileName) == ["b.jpg", "c.jpg"])
+        #expect(groups.allSatisfy { $0.kind == .singles && !$0.isReviewable })
+    }
+}

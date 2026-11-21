@@ -120,6 +120,11 @@ struct SidebarView: View {
                     ForEach(model.pendingGroups) { GroupRow(group: $0).tag($0.id) }
                 }
             }
+            if !model.singleGroups.isEmpty {
+                Section("Enkeltbilder (\(model.singleCount))") {
+                    ForEach(model.singleGroups) { GroupRow(group: $0).tag($0.id) }
+                }
+            }
             if !model.finishedGroups.isEmpty {
                 Section("Ferdig (\(model.finishedGroups.count))") {
                     ForEach(model.finishedGroups) { GroupRow(group: $0).tag($0.id) }
@@ -139,8 +144,12 @@ struct GroupRow: View {
                 .frame(width: 48, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             VStack(alignment: .leading, spacing: 2) {
-                Text(group.date, format: .dateTime.day().month(.abbreviated).year().hour().minute())
-                    .font(.callout)
+                if group.kind == .singles, let title = group.title {
+                    Text(title.prefix(1).uppercased() + title.dropFirst()).font(.callout)
+                } else {
+                    Text(group.date, format: .dateTime.day().month(.abbreviated).year().hour().minute())
+                        .font(.callout)
+                }
                 Text(caption).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
@@ -154,6 +163,7 @@ struct GroupRow: View {
     }
 
     private var caption: String {
+        if group.kind == .singles { return "\(group.photos.count) enkeltbilder" }
         switch group.status {
         case .pending: return "\(group.photos.count) bilder"
         case .done: return "beholdt \(group.photos.count)"

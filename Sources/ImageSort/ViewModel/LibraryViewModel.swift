@@ -85,8 +85,12 @@ final class LibraryViewModel {
     }
 
     var canUndo: Bool { !undoStack.isEmpty }
-    var pendingGroups: [PhotoGroup] { groups.filter { $0.status == .pending } }
-    var finishedGroups: [PhotoGroup] { groups.filter { $0.status != .pending } }
+    var pendingGroups: [PhotoGroup] { groups.filter(\.isReviewable) }
+    var finishedGroups: [PhotoGroup] { groups.filter { $0.kind == .series && $0.status != .pending } }
+    var singleGroups: [PhotoGroup] { groups.filter { $0.kind == .singles } }
+    /// Samme rekkefølge som i sidefeltet (brukes av ↑↓).
+    var sidebarOrder: [PhotoGroup] { pendingGroups + singleGroups + finishedGroups }
+    var singleCount: Int { singleGroups.reduce(0) { $0 + $1.photos.count } }
 
     var selectedGroup: PhotoGroup? {
         guard let id = selectedGroupID else { return nil }
@@ -173,11 +177,38 @@ final class LibraryViewModel {
             if preselect, let s = g.suggested { g.selected = [s] } else { g.selected = Set(members.map(\.url)) }
             return g
         }
-        let kept = groups.filter { $0.status != .pending }
-        groups = (kept + fresh).sorted { $0.date < $1.date }
-        if selectedGroup == nil || selectedGroup?.status != .pending {
-            selectedGroupID = pendingGroups.first?.id ?? groups.first?.id
+        let kept = groups.filter { $0.kind == .series && $0.status != .pending }
+        let series = kept + fresh
+        let inSeries = Set(series.flatMap { $0.photos.map(\.url) })
+        let singles = Self.singleGroups(photos.filter { !inSeries.contains($0.url) })
+        let previous = selectedGroup
+        groups = (series + singles).sorted { $0.date < $1.date }
+        // Behold valgt enkeltbilde-måned hvis mulig, ellers første uferdige serie.
+        if let previous, previous.kind == .singles, let same = singleGroups.first(where: { $0.title == previous.title }) {
+            selectedGroupID = same.id
+        } else if selectedGroup == nil || selectedGroup?.isReviewable != true {
+            selectedGroupID = (pendingGroups.first ?? sidebarOrder.first)?.id
             focusedIndex = 0
+        }
+    }
+
+    private static let monthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "nb_NO")
+        f.dateFormat = "LLLL yyyy"
+        return f
+    }()
+
+    /// Deler enkeltbilder opp per måned.
+    static func singleGroups(_ photos: [Photo]) -> [PhotoGroup] {
+        let cal = Calendar.current
+        let byMonth = Dictionary(grouping: photos) { cal.dateComponents([.year, .month], from: $0.captureDate) }
+        return byMonth.values.map { members in
+            let sorted = members.sorted { $0.captureDate < $1.captureDate }
+            var g = PhotoGroup(photos: sorted)
+            g.kind = .singles
+            g.title = monthFormatter.string(from: sorted[0].captureDate)
+            return g
         }
     }
 
@@ -193,7 +224,7 @@ final class LibraryViewModel {
 
     func moveFocus(_ delta: Int) {
         guard let g = selectedGroup, !g.photos.isEmpty else { return }
-        if showPreview && viewerOnlySelected,
+        if showPreview && viewerOnlySelected && g.isReviewable,
            let next = Self.nextSelectedIndex(from: focusedIndex, delta: delta,
                                              selected: g.photos.map { g.selected.contains($0.url) }) {
             focusedIndex = next
@@ -221,14 +252,15 @@ final class LibraryViewModel {
     }
 
     func moveGroup(_ delta: Int) {
-        guard let i = selectedIndex else { select(group: groups.first?.id); return }
+        let order = sidebarOrder
+        guard let i = order.firstIndex(where: { $0.id == selectedGroupID }) else { select(group: order.first?.id); return }
         let j = i + delta
-        guard groups.indices.contains(j) else { return }
-        select(group: groups[j].id)
+        guard order.indices.contains(j) else { return }
+        select(group: order[j].id)
     }
 
     func toggle(_ url: URL) {
-        guard let i = selectedIndex else { return }
+        guard let i = selectedIndex, groups[i].isReviewable else { return }
         if groups[i].selected.contains(url) { groups[i].selected.remove(url) } else { groups[i].selected.insert(url) }
     }
 
@@ -239,6 +271,7 @@ final class LibraryViewModel {
 
     func selectOnly(index: Int) {
         guard let i = selectedIndex, groups[i].photos.indices.contains(index) else { return }
+        guard groups[i].isReviewable else { focusedIndex = index; return }
         groups[i].selected = [groups[i].photos[index].url]
         focusedIndex = index
     }
@@ -296,7 +329,7 @@ final class LibraryViewModel {
         // Oppdater med en gang, kopier i bakgrunnen (filer i Dropbox kan måtte lastes ned først).
         if adding {
             collectionNames.insert(name)
-            if let i = selectedIndex, groups[i].photos.contains(photo), groups[i].status == .pending {
+            if let i = selectedIndex, groups[i].photos.contains(photo), groups[i].isReviewable {
                 groups[i].selected.insert(photo.url)  // merkede bilder skal aldri slettes ved en feil
             }
         } else {
@@ -328,7 +361,7 @@ final class LibraryViewModel {
 
     /// Kalles fra Enter / knapp. Viser bekreftelse første gang.
     func requestConfirm() {
-        guard let g = selectedGroup, g.status == .pending else { return }
+        guard let g = selectedGroup, g.isReviewable else { return }
         if g.selected.isEmpty {
             pendingDeleteAllGroupID = g.id
             return
@@ -363,7 +396,7 @@ final class LibraryViewModel {
     }
 
     func skip() {
-        guard let i = selectedIndex, groups[i].status == .pending else { return }
+        guard let i = selectedIndex, groups[i].isReviewable else { return }
         groups[i].status = .skipped
         reviewed.formUnion(groups[i].photos.map(\.url))
         undoStack.append(UndoRecord(groupID: groups[i].id, items: [], previousStatus: .pending))
@@ -371,7 +404,7 @@ final class LibraryViewModel {
     }
 
     private func advance(from i: Int) {
-        let next = groups[(i + 1)...].first { $0.status == .pending } ?? groups.first { $0.status == .pending }
+        let next = groups[(i + 1)...].first(where: \.isReviewable) ?? groups.first(where: \.isReviewable)
         select(group: next?.id ?? groups[i].id)
     }
 
@@ -404,7 +437,7 @@ final class LibraryViewModel {
     // MARK: - Claude
 
     func askClaude() {
-        guard let g = selectedGroup, g.status == .pending, !claudeBusy.contains(g.id) else { return }
+        guard let g = selectedGroup, g.isReviewable, !claudeBusy.contains(g.id) else { return }
         let id = g.id
         // Store grupper: send de beste lokalt rangerte, men i samme rekkefølge som i appen.
         let top = Set(g.photos.sorted { (g.scores[$0.url]?.total ?? 0) > (g.scores[$1.url]?.total ?? 0) }

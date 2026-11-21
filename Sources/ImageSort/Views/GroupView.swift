@@ -47,7 +47,7 @@ struct GroupView: View {
                             .onTapGesture(count: 2) { model.openViewer(at: index) }
                             .onTapGesture {
                                 model.focusedIndex = index
-                                if group.status == .pending { model.toggle(photo.url) }
+                                if group.isReviewable { model.toggle(photo.url) }
                             }
                         }
                     }
@@ -74,7 +74,7 @@ struct PhotoCell: View {
     private var isSelected: Bool { group.selected.contains(photo.url) }
     private var inCollection: Bool { model.isInCollection(photo) }
     private var score: PhotoScore? { group.scores[photo.url] }
-    private var dimmed: Bool { group.status == .pending && !isSelected }
+    private var dimmed: Bool { group.isReviewable && !isSelected }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -142,7 +142,7 @@ struct PhotoCell: View {
 
     @ViewBuilder private var badges: some View {
         HStack(spacing: 4) {
-            if index < 9 {
+            if index < 9 && group.isReviewable {
                 Text("\(index + 1)")
                     .font(.caption.weight(.bold).monospacedDigit())
                     .frame(width: 22, height: 22)
@@ -168,7 +168,7 @@ struct PhotoCell: View {
     }
 
     @ViewBuilder private var selectionMark: some View {
-        if group.status == .pending {
+        if group.isReviewable {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.title2)
                 .symbolRenderingMode(.palette)
@@ -178,7 +178,7 @@ struct PhotoCell: View {
     }
 
     private var borderColor: Color {
-        if isSelected && group.status == .pending { return .green }
+        if isSelected && group.isReviewable { return .green }
         if isFocused { return .accentColor }
         return .clear
     }
@@ -200,7 +200,16 @@ struct ActionBar: View {
                     .foregroundStyle(.purple)
             }
             HStack(spacing: 12) {
-                if group.status == .pending {
+                if group.kind == .singles {
+                    Button { model.openViewer() } label: {
+                        Label("Full visning", systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                    .help("F")
+                    Label("Enkeltbilder slettes aldri her. Trykk K eller 📌 for å legge et bilde i samlingen.",
+                          systemImage: "info.circle")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else if group.status == .pending {
                     let discard = group.photos.count - group.selected.count
                     Button {
                         model.requestConfirm()
