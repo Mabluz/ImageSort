@@ -177,3 +177,23 @@ import Foundation
         #expect(CollectionService.existingNames(in: folder).isEmpty)
     }
 }
+
+@Suite struct OnlySelectedNavigationTests {
+    @Test func togglesBetweenTwoSelected() {
+        let sel = [false, true, false, false, true]
+        #expect(LibraryViewModel.nextSelectedIndex(from: 1, delta: 1, selected: sel) == 4)
+        #expect(LibraryViewModel.nextSelectedIndex(from: 4, delta: 1, selected: sel) == 1)  // går rundt
+        #expect(LibraryViewModel.nextSelectedIndex(from: 1, delta: -1, selected: sel) == 4)
+    }
+
+    @Test func jumpsFromUnselectedToNearestSelected() {
+        let sel = [false, true, false, false, true]
+        #expect(LibraryViewModel.nextSelectedIndex(from: 2, delta: 1, selected: sel) == 4)
+        #expect(LibraryViewModel.nextSelectedIndex(from: 2, delta: -1, selected: sel) == 1)
+    }
+
+    @Test func nilWhenNoOtherSelected() {
+        #expect(LibraryViewModel.nextSelectedIndex(from: 1, delta: 1, selected: [false, true]) == nil)
+        #expect(LibraryViewModel.nextSelectedIndex(from: 0, delta: 1, selected: [false, false]) == nil)
+    }
+}

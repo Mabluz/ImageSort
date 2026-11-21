@@ -16,7 +16,7 @@ struct ViewerView: View {
                 topBar(group: group, photo: photo, index: index)
                 ZStack {
                     ZoomableImageView(image: full ?? preview, pixelSize: pixelSize, command: model.zoomCommand) { zoom = $0 }
-                    navButtons(count: group.photos.count, index: index)
+                    navButtons(group: group, index: index)
                     if full == nil {
                         VStack {
                             Spacer()
@@ -62,6 +62,12 @@ struct ViewerView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text("Bilde \(index + 1) av \(group.photos.count)").font(.headline)
+                    if model.viewerOnlySelected {
+                        let sel = group.photos.indices.filter { group.selected.contains(group.photos[$0].url) }
+                        if let pos = sel.firstIndex(of: index) {
+                            Text("· valgt \(pos + 1) av \(sel.count)").font(.headline).foregroundStyle(.green)
+                        }
+                    }
                     if photo.url == group.suggested { badge("Forslag", "star.fill", .yellow, .black) }
                     if photo.url == group.claudePick { badge("Claude", "sparkles", .purple, .white) }
                 }
@@ -71,6 +77,13 @@ struct ViewerView: View {
                 }
             }
             Spacer()
+
+            Toggle(isOn: Binding(get: { model.viewerOnlySelected }, set: { model.viewerOnlySelected = $0 })) {
+                Label("Kun valgte", systemImage: "checkmark.circle")
+            }
+            .toggleStyle(.button)
+            .tint(.green)
+            .help("V – piltastene hopper bare mellom bildene du har valgt å beholde")
 
             HStack(spacing: 4) {
                 Button { model.zoom(.zoomOut) } label: { Image(systemName: "minus.magnifyingglass") }.help("Zoom ut (−)")
@@ -116,11 +129,14 @@ struct ViewerView: View {
             .foregroundStyle(fg)
     }
 
-    private func navButtons(count: Int, index: Int) -> some View {
-        HStack {
-            navButton("chevron.left", enabled: index > 0) { model.moveFocus(-1) }
+    private func navButtons(group: PhotoGroup, index: Int) -> some View {
+        let count = group.photos.count
+        let onlySel = model.viewerOnlySelected
+            && LibraryViewModel.nextSelectedIndex(from: index, delta: 1, selected: group.photos.map { group.selected.contains($0.url) }) != nil
+        return HStack {
+            navButton("chevron.left", enabled: onlySel || index > 0) { model.moveFocus(-1) }
             Spacer()
-            navButton("chevron.right", enabled: index < count - 1) { model.moveFocus(1) }
+            navButton("chevron.right", enabled: onlySel || index < count - 1) { model.moveFocus(1) }
         }
         .padding(.horizontal, 12)
     }
@@ -181,7 +197,7 @@ struct ViewerView: View {
                 }
             }
             HStack {
-                Text("←→ bla · mellomrom behold/ikke · K samling · +/− zoom · 0 tilpass · dobbeltklikk 100 % · ↩ bekreft og neste gruppe · Esc lukk")
+                Text("←→ bla · V kun valgte · mellomrom behold/ikke · K samling · +/− zoom · 0 tilpass · dobbeltklikk 100 % · ↩ bekreft og neste gruppe · Esc lukk")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if group.status == .pending {

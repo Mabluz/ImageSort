@@ -21,7 +21,8 @@ Analysene lagres, så det går mye raskere neste gang samme mappe åpnes.
 | 1–9 | Velg *kun* bilde nr. n |
 | Enter | Behold valgte, flytt resten til Papirkurven, gå til neste gruppe |
 | S | Hopp over gruppen (behold alt) |
-| F | Forstørr / sammenlign med forslaget |
+| F | Fullskjerm med zoom (+/−, 0, dobbeltklikk = 100 %) |
+| V | I fullskjerm: bla kun mellom valgte bilder (bytt fram og tilbake) |
 | C | Spør Claude |
 | K | Kopier bildet til aktiv samling / fjern det igjen |
 | ⌘Z | Angre siste gruppe (legger bildene tilbake) |

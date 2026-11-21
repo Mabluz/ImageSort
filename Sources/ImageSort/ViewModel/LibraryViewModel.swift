@@ -193,7 +193,31 @@ final class LibraryViewModel {
 
     func moveFocus(_ delta: Int) {
         guard let g = selectedGroup, !g.photos.isEmpty else { return }
+        if showPreview && viewerOnlySelected,
+           let next = Self.nextSelectedIndex(from: focusedIndex, delta: delta,
+                                             selected: g.photos.map { g.selected.contains($0.url) }) {
+            focusedIndex = next
+            return
+        }
         focusedIndex = min(max(0, focusedIndex + delta), g.photos.count - 1)
+    }
+
+    /// Fullskjerm: hopp bare mellom valgte bilder (går rundt, så to valgte kan byttes fram og tilbake).
+    var viewerOnlySelected: Bool = UserDefaults.standard.bool(forKey: "viewerOnlySelected") {
+        didSet { UserDefaults.standard.set(viewerOnlySelected, forKey: "viewerOnlySelected") }
+    }
+
+    /// Neste valgte indeks i retning `delta`, med omløp. nil hvis ingen andre valgte finnes.
+    nonisolated static func nextSelectedIndex(from current: Int, delta: Int, selected: [Bool]) -> Int? {
+        let n = selected.count
+        guard n > 0, delta != 0 else { return nil }
+        let step = delta > 0 ? 1 : -1
+        var i = current
+        for _ in 0..<n {
+            i = ((i + step) % n + n) % n
+            if selected[i] && i != current { return i }
+        }
+        return nil
     }
 
     func moveGroup(_ delta: Int) {
@@ -455,6 +479,7 @@ final class LibraryViewModel {
             zoom(ch == "-" ? .zoomOut : ch == "0" ? .fit : .zoomIn); return true
         case "c": askClaude(); return true
         case "k": toggleCollectionFocused(); return true
+        case "v" where showPreview: viewerOnlySelected.toggle(); return true
         default: return false
         }
     }
