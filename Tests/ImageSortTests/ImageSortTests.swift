@@ -110,6 +110,31 @@ import Foundation
     }
 }
 
+@Suite struct FileNameDateTests {
+    private func parts(_ name: String) -> [Int]? {
+        guard let d = FolderScanner.dateFromFileName(name) else { return nil }
+        let c = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: d)
+        return [c.year!, c.month!, c.day!, c.hour!, c.minute!, c.second!]
+    }
+
+    @Test(arguments: [
+        "20261121_164418.jpg",
+        "20261121_164418(0).jpg",
+        "IMG_20261121_164418.jpg",
+        "PXL_20261121_164418123.jpg",
+        "2026-11-21 16.44.18.jpg",
+        "Screenshot 2026-11-21 at 16.44.18.png",
+    ])
+    func parsesCommonPatterns(_ name: String) {
+        #expect(parts(name) == [2026, 11, 21, 16, 44, 18])
+    }
+
+    @Test func rejectsNonDates() {
+        #expect(parts("IMG_1234.jpg") == nil)
+        #expect(parts("20261399_999999.jpg") == nil)
+    }
+}
+
 @Suite struct SharpnessTests {
     @Test func flatImageHasZeroVariance() {
         let px = [UInt8](repeating: 128, count: 100)

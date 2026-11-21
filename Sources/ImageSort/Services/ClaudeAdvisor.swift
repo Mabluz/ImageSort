@@ -43,6 +43,7 @@ enum ClaudeAdvisor {
         Vurder: skarphet/fokus på motivet, åpne øyne, ansiktsuttrykk og smil, komposisjon, lys og om motivet er helt med.
         Svar KUN med ett JSON-objekt, uten annen tekst:
         {"best": <nummer>, "ranking": [<nummer fra best til dårligst>], "comment": "<én kort setning på norsk om hvorfor>"}
+        I "comment": ikke bruk bildenumre, beskriv heller hva som skiller det valgte bildet fra de andre.
         """
     }
 

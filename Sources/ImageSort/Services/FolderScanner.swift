@@ -19,7 +19,7 @@ enum FolderScanner {
                   let values = try? url.resourceValues(forKeys: Set(keys)),
                   values.isRegularFile == true else { continue }
             let mod = values.contentModificationDate ?? .distantPast
-            let date = captureDate(of: url) ?? values.creationDate ?? mod
+            let date = captureDate(of: url) ?? dateFromFileName(url.lastPathComponent) ?? values.creationDate ?? mod
             photos.append(Photo(
                 url: url,
                 captureDate: date,
@@ -37,6 +37,20 @@ enum FolderScanner {
         f.dateFormat = "yyyy:MM:dd HH:mm:ss"
         return f
     }()
+
+    private static let fileNamePattern = #/(20\d{2}|19\d{2})[-_.]?(\d{2})[-_.]?(\d{2})[ _T-]?(?:at )?(\d{2})[._:-]?(\d{2})[._:-]?(\d{2})/#
+
+    /// Tolker tidspunkt fra vanlige filnavn, f.eks. «20261121_164418.jpg», «IMG_20261121_164418.jpg»,
+    /// «PXL_20261121_164418123.jpg» og Dropbox «2026-11-21 16.44.18.jpg». Brukes når EXIF mangler.
+    static func dateFromFileName(_ name: String) -> Date? {
+        guard let m = name.firstMatch(of: fileNamePattern) else { return nil }
+        var c = DateComponents()
+        c.year = Int(m.1); c.month = Int(m.2); c.day = Int(m.3)
+        c.hour = Int(m.4); c.minute = Int(m.5); c.second = Int(m.6)
+        guard let mo = c.month, (1...12).contains(mo), let d = c.day, (1...31).contains(d),
+              let h = c.hour, h < 24, let mi = c.minute, mi < 60, let s = c.second, s < 60 else { return nil }
+        return Calendar.current.date(from: c)
+    }
 
     /// Leser EXIF DateTimeOriginal (+ subsekunder) uten å dekode bildet.
     static func captureDate(of url: URL) -> Date? {

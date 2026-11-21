@@ -10,7 +10,8 @@ enum Settings {
     static let confirmedOnceKey = "confirmedTrashOnce"
 
     static let defaultTimeGap = 90.0
-    static let defaultThreshold = 0.55
+    /// Kalibrert på ekte serier: samme motiv ~0.1–0.4, annet motiv i samme rom ~0.64+.
+    static let defaultThreshold = 0.6
     static let defaultModel = "sonnet"
 
     static func register() {
@@ -301,9 +302,10 @@ final class LibraryViewModel {
     func askClaude() {
         guard let g = selectedGroup, g.status == .pending, !claudeBusy.contains(g.id) else { return }
         let id = g.id
-        // Send de beste lokalt rangerte hvis gruppen er stor.
-        let ordered = g.photos.sorted { (g.scores[$0.url]?.total ?? 0) > (g.scores[$1.url]?.total ?? 0) }
-        let urls = Array(ordered.prefix(ClaudeAdvisor.maxImages)).map(\.url)
+        // Store grupper: send de beste lokalt rangerte, men i samme rekkefølge som i appen.
+        let top = Set(g.photos.sorted { (g.scores[$0.url]?.total ?? 0) > (g.scores[$1.url]?.total ?? 0) }
+            .prefix(ClaudeAdvisor.maxImages).map(\.url))
+        let urls = g.photos.map(\.url).filter { top.contains($0) }
         let model = UserDefaults.standard.string(forKey: Settings.claudeModelKey) ?? Settings.defaultModel
         claudeBusy.insert(id)
         Task {
