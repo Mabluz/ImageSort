@@ -1,0 +1,124 @@
+import Testing
+import Foundation
+@testable import ImageSort
+
+@Suite struct GroupingTests {
+    @Test func timeClustersSplitOnGap() {
+        let t0 = Date(timeIntervalSince1970: 0)
+        let dates = [0, 2, 5, 200, 201, 1000].map { t0.addingTimeInterval($0) }
+        #expect(SimilarityGrouper.timeClusters(dates: dates, maxGap: 90) == [[0, 1, 2], [3, 4], [5]])
+    }
+
+    @Test func timeClustersEmpty() {
+        #expect(SimilarityGrouper.timeClusters(dates: [], maxGap: 90).isEmpty)
+    }
+
+    @Test func clusterIsTransitive() {
+        // 0~1, 1~2 (men 0 og 2 er langt fra hverandre) => én gruppe. 3 alene.
+        let d: [[Float]] = [
+            [0, 0.3, 0.9, 1.5],
+            [0.3, 0, 0.3, 1.5],
+            [0.9, 0.3, 0, 1.5],
+            [1.5, 1.5, 1.5, 0],
+        ]
+        let groups = SimilarityGrouper.cluster(count: 4, threshold: 0.5) { d[$0][$1] }
+        #expect(groups == [[0, 1, 2], [3]])
+    }
+
+    @Test func clusterIgnoresMissingPrints() {
+        let groups = SimilarityGrouper.cluster(count: 3, threshold: 0.5) { _, _ in nil }
+        #expect(groups == [[0], [1], [2]])
+    }
+
+    @Test func clusterRespectsWindow() {
+        let groups = SimilarityGrouper.cluster(count: 3, window: 1, threshold: 0.5) { a, b in
+            (a, b) == (0, 2) ? 0.1 : 2
+        }
+        #expect(groups.count == 3)
+    }
+}
+
+@Suite struct RankingTests {
+    @Test func sharperWinsWithoutFaces() {
+        let blurry = PhotoAnalysis(aesthetics: 0.2, sharpness: 50)
+        let sharp = PhotoAnalysis(aesthetics: 0.2, sharpness: 500)
+        let s = Ranking.score([blurry, sharp])
+        #expect(s[1].total > s[0].total)
+        #expect(s[0].reasons.contains("uskarpt"))
+        #expect(s[1].reasons.contains("skarpest"))
+    }
+
+    @Test func closedEyesArePenalised() {
+        let open = PhotoAnalysis(aesthetics: 0.3, sharpness: 400, faceQualities: [0.6])
+        let closed = PhotoAnalysis(aesthetics: 0.3, sharpness: 400, faceQualities: [0.6], eyesClosedCount: 1)
+        let s = Ranking.score([open, closed])
+        #expect(s[0].total > s[1].total)
+        #expect(s[1].reasons.contains("øyne lukket"))
+    }
+
+    @Test func scoresAreClamped() {
+        let a = PhotoAnalysis(aesthetics: -1, sharpness: 0, faceQualities: [], eyesClosedCount: 5)
+        let b = PhotoAnalysis(aesthetics: 1, sharpness: 100, faceQualities: [1])
+        for s in Ranking.score([a, b]) { #expect((0...100).contains(s.total)) }
+    }
+
+    @Test func emptyInput() { #expect(Ranking.score([]).isEmpty) }
+}
+
+@Suite struct ClaudeParsingTests {
+    @Test func parsesCliEnvelope() throws {
+        let inner = #"Her er svaret: {"best": 2, "ranking": [2, 1, 3], "comment": "Skarpest og smiler."}"#
+        let env = try String(data: JSONSerialization.data(withJSONObject: ["type": "result", "is_error": false, "result": inner]), encoding: .utf8)!
+        let v = try ClaudeAdvisor.parse(output: env, count: 3)
+        #expect(v == ClaudeVerdict(best: 1, ranking: [1, 0, 2], comment: "Skarpest og smiler."))
+    }
+
+    @Test func parsesBareJSON() throws {
+        let v = try ClaudeAdvisor.parse(output: #"{"best":1,"comment":"ok"}"#, count: 2)
+        #expect(v.best == 0)
+        #expect(v.ranking.isEmpty)
+    }
+
+    @Test func rejectsOutOfRange() {
+        #expect(throws: ClaudeError.self) { try ClaudeAdvisor.parse(output: #"{"best": 9}"#, count: 3) }
+    }
+
+    @Test func rejectsCliError() {
+        let env = #"{"type":"result","is_error":true,"result":"Not logged in"}"#
+        #expect(throws: ClaudeError.self) { try ClaudeAdvisor.parse(output: env, count: 3) }
+    }
+}
+
+@Suite struct CacheTests {
+    @Test func keyChangesWithModification() {
+        let d = Date(timeIntervalSince1970: 1000)
+        let a = AnalysisCache.key(path: "/a.jpg", modificationDate: d, size: 10)
+        #expect(a != AnalysisCache.key(path: "/a.jpg", modificationDate: d.addingTimeInterval(1), size: 10))
+        #expect(a != AnalysisCache.key(path: "/a.jpg", modificationDate: d, size: 11))
+        #expect(a == AnalysisCache.key(path: "/a.jpg", modificationDate: d, size: 10))
+    }
+
+    @Test func roundTripsToDisk() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("imagesort-test-\(UUID()).plist")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let photo = Photo(url: URL(fileURLWithPath: "/x.jpg"), captureDate: .now, fileSize: 5, modificationDate: .now)
+        let c1 = AnalysisCache(fileURL: file)
+        c1.set(PhotoAnalysis(aesthetics: 0.5, sharpness: 12), for: photo)
+        c1.save()
+        let c2 = AnalysisCache(fileURL: file)
+        #expect(c2.get(photo)?.sharpness == 12)
+    }
+}
+
+@Suite struct SharpnessTests {
+    @Test func flatImageHasZeroVariance() {
+        let px = [UInt8](repeating: 128, count: 100)
+        #expect(Sharpness.laplacianVariance(gray: px, width: 10, height: 10) == 0)
+    }
+
+    @Test func edgesIncreaseVariance() {
+        var px = [UInt8](repeating: 0, count: 100)
+        for i in stride(from: 0, to: 100, by: 2) { px[i] = 255 }
+        #expect(Sharpness.laplacianVariance(gray: px, width: 10, height: 10) > 1000)
+    }
+}
