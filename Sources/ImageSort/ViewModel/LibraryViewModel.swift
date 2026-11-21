@@ -318,7 +318,7 @@ final class LibraryViewModel {
 
     func isInCollection(_ photo: Photo) -> Bool {
         guard let folder = collectionURL else { return false }
-        return collectionNames.contains(CollectionService.fileName(for: photo, in: folder))
+        return CollectionService.existingName(for: photo, in: folder, names: collectionNames) != nil
     }
 
     /// Antall filer i samlingsmappen.
@@ -326,16 +326,16 @@ final class LibraryViewModel {
 
     func toggleCollection(_ photo: Photo) {
         guard let folder = collectionURL else { chooseCollection(); if collectionURL != nil { toggleCollection(photo) }; return }
-        let name = CollectionService.fileName(for: photo, in: folder)
-        let adding = !collectionNames.contains(name)
+        let existing = CollectionService.existingName(for: photo, in: folder, names: collectionNames)
+        let adding = existing == nil
         // Oppdater med en gang, kopier i bakgrunnen (filer i Dropbox kan måtte lastes ned først).
         if adding {
-            collectionNames.insert(name)
+            collectionNames.insert(CollectionService.fileName(for: photo, in: folder))
             if let i = selectedIndex, groups[i].photos.contains(photo), groups[i].isReviewable {
                 groups[i].selected.insert(photo.url)  // merkede bilder skal aldri slettes ved en feil
             }
-        } else {
-            collectionNames.remove(name)
+        } else if let existing {
+            collectionNames.remove(existing)
         }
         Task.detached {
             do {

@@ -34,8 +34,8 @@ Analysene lagres, så det går mye raskere neste gang samme mappe åpnes.
 Velg **📌 Samling** i verktøylinjen og lag en mappe, for eksempel `Julekalender2026`. Trykk **K**, eller 📌 på bildet, så **kopieres** bildet dit med navnet
 
 ```
-Julekalender2026_2026-11-21_16-44-18_20261121_164418.jpg
-<samling>_<opptaksdato>_<originalt filnavn>
+Sommerferie_2026-07-14_16-44-18_20260714_164418.jpg
+<mappen bildet lå i>_<opptaksdato>_<originalt filnavn>
 ```
 
 Originalen røres ikke. Trykker du K igjen, flyttes kopien til Papirkurven. Merkede bilder blir automatisk valgt som «behold». Merkingen leses fra mappen selv, så den huskes mellom gangene. Du kan bytte mellom flere samlinger i menyen.

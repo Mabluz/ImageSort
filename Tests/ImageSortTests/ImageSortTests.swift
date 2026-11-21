@@ -149,13 +149,26 @@ import Foundation
 }
 
 @Suite struct CollectionTests {
-    @Test func fileNameHasCollectionDateAndOriginalName() {
+    @Test func fileNameUsesSourceFolderDateAndOriginalName() {
         var c = DateComponents(); c.year = 2026; c.month = 11; c.day = 21; c.hour = 16; c.minute = 44; c.second = 18
         let date = Calendar.current.date(from: c)!
-        #expect(CollectionService.fileName(collection: "Julekalender2026", captureDate: date, originalName: "20261121_164418.jpg")
-                == "Julekalender2026_2026-11-21_16-44-18_20261121_164418.jpg")
-        #expect(CollectionService.fileName(collection: "Bok 2026/vår", captureDate: date, originalName: "a.heic")
+        let photo = Photo(url: URL(fileURLWithPath: "/Users/x/Desktop/ImageSort-test/20261121_164418.jpg"),
+                          captureDate: date, fileSize: 1, modificationDate: date)
+        let collection = URL(fileURLWithPath: "/Users/x/Julekalender2026")
+        #expect(CollectionService.fileName(for: photo, in: collection)
+                == "ImageSort-test_2026-11-21_16-44-18_20261121_164418.jpg")
+        #expect(CollectionService.fileName(prefix: "Bok 2026/vår", captureDate: date, originalName: "a.heic")
                 == "Bok 2026-vår_2026-11-21_16-44-18_a.heic")
+    }
+
+    @Test func recognisesLegacyCollectionPrefixedNames() {
+        let photo = Photo(url: URL(fileURLWithPath: "/a/ImageSort-test/x.jpg"), captureDate: Date(timeIntervalSince1970: 0),
+                          fileSize: 1, modificationDate: .now)
+        let folder = URL(fileURLWithPath: "/b/Tester")
+        let legacy = CollectionService.legacyFileName(for: photo, in: folder)
+        #expect(legacy.hasPrefix("Tester_"))
+        #expect(CollectionService.existingName(for: photo, in: folder, names: [legacy]) == legacy)
+        #expect(CollectionService.existingName(for: photo, in: folder, names: []) == nil)
     }
 
     @Test func addAndRemoveCopy() throws {
