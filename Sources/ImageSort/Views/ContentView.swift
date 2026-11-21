@@ -68,6 +68,8 @@ struct ContentView: View {
                 Text("\(model.trashedCount) slettet · \(ByteCountFormatter.string(fromByteCount: model.trashedBytes, countStyle: .file)) frigjort")
                     .foregroundStyle(.secondary)
             }
+            GroupingMenu()
+                .disabled(model.phase != .ready)
             CollectionMenu()
             Button { model.undo() } label: { Label("Angre", systemImage: "arrow.uturn.backward") }
                 .disabled(!model.canUndo)
@@ -163,7 +165,7 @@ struct DetailView: View {
         case .ready:
             if model.groups.isEmpty {
                 ContentUnavailableView("Fant ingen like bilder", systemImage: "photo.on.rectangle",
-                                       description: Text("Prøv å øke tidsvinduet eller likhetsterskelen i Innstillinger (⌘,)."))
+                                       description: Text("Trykk «Gruppering» i verktøylinjen og dra likhet eller tidsvindu mot høyre."))
             } else if let group = model.selectedGroup {
                 GroupView(group: group)
             } else {

@@ -58,9 +58,14 @@ Bruker [Claude Code](https://claude.com/claude-code) på Macen, og dermed Claude
 
 Modell velges i Innstillinger (⌘,). Uten Claude fungerer alt annet helt offline.
 
+## Justere grupperingen
+Trykk **Gruppering** (slider-ikonet) i verktøylinjen. Grupperingen oppdateres med en gang du drar:
+- **Hvor like må bildene være?** Dra mot venstre hvis forskjellige motiver havner i samme gruppe. Dra mot høyre hvis bilder av samme motiv deles opp. Standard er 0,60.
+- **Tidsvindu:** bilder med lengre pause mellom seg enn dette havner aldri i samme gruppe. Standard er 90 sek.
+- **Standard** tilbakestiller begge. Grupper du allerede har gått gjennom, endres ikke.
+
 ## Innstillinger (⌘,)
-- **Tidsvindu:** hvor lang pause det kan være mellom bilder i samme serie.
-- **Likhet:** hvor like bildene må være for å havne i samme gruppe.
+- De samme grupperingssliderne, i tillegg til grensen for uskarphet, om forslaget skal velges automatisk, og hvilken Claude-modell som brukes.
 
 ## Utvikling
 ```bash

@@ -1,8 +1,6 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage(Settings.timeGapKey) private var timeGap = Settings.defaultTimeGap
-    @AppStorage(Settings.thresholdKey) private var threshold = Settings.defaultThreshold
     @AppStorage(Settings.claudeModelKey) private var claudeModel = Settings.defaultModel
     @AppStorage(Settings.preselectKey) private var preselect = true
     @AppStorage(Settings.blurKey) private var blur = Ranking.defaultBlurThreshold
@@ -11,22 +9,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Gruppering") {
-                LabeledContent("Tidsvindu") {
-                    VStack(alignment: .leading) {
-                        Slider(value: $timeGap, in: 10...600, step: 10)
-                        Text("Bilder tatt med mindre enn \(Int(timeGap)) sekunders mellomrom kan havne i samme gruppe.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                LabeledContent("Likhet") {
-                    VStack(alignment: .leading) {
-                        Slider(value: $threshold, in: 0.2...1.0, step: 0.05) {
-                            EmptyView()
-                        } minimumValueLabel: { Text("Streng").font(.caption) } maximumValueLabel: { Text("Romslig").font(.caption) }
-                        Text("Høyere verdi gir større grupper med bilder som ligner mindre på hverandre. (\(threshold, specifier: "%.2f"))")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }
+                GroupingSliders()
                 Toggle("Velg det foreslåtte bildet automatisk", isOn: $preselect)
             }
 
