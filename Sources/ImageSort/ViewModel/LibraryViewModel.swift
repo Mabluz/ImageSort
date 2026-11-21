@@ -38,6 +38,8 @@ private struct UndoRecord {
     let groupID: UUID
     let items: [TrashedItem]
     let previousStatus: GroupStatus
+    /// true = ett enkelt bilde slettet med ⌫ (gruppestatus endres ikke ved angre).
+    var singlePhoto = false
 }
 
 @MainActor
@@ -409,21 +411,68 @@ final class LibraryViewModel {
     }
 
     func undo() {
-        guard let record = undoStack.popLast(),
-              let i = groups.firstIndex(where: { $0.id == record.groupID }) else { return }
+        guard let record = undoStack.popLast() else { return }
         let restored = TrashService.restore(record.items)
         if restored.count < record.items.count {
             errorMessage = "Noen bilder kunne ikke legges tilbake. Sjekk Papirkurven."
         }
         let back = restored.map(\.photo)
-        groups[i].photos = (groups[i].photos + back).sorted { $0.captureDate < $1.captureDate }
-        groups[i].status = record.previousStatus
         photos.append(contentsOf: back)
         photos.sort { $0.captureDate < $1.captureDate }
-        reviewed.subtract(groups[i].photos.map(\.url))
         trashedCount -= restored.count
         trashedBytes -= restored.reduce(0) { $0 + $1.photo.fileSize }
-        select(group: groups[i].id)
+
+        if let i = groups.firstIndex(where: { $0.id == record.groupID }) {
+            groups[i].photos = (groups[i].photos + back).sorted { $0.captureDate < $1.captureDate }
+            if !record.singlePhoto {
+                groups[i].status = record.previousStatus
+                reviewed.subtract(groups[i].photos.map(\.url))
+            }
+            select(group: groups[i].id)
+        } else {
+            // Gruppen finnes ikke lenger (f.eks. siste bilde i en måned ble slettet): bygg enkeltbildene på nytt.
+            rebuildSingles()
+            if let p = back.first, let g = groups.first(where: { $0.photos.contains(p) }) { select(group: g.id) }
+        }
+        if record.singlePhoto, let p = back.first, let g = selectedGroup,
+           let fi = g.photos.firstIndex(of: p) {
+            focusedIndex = fi
+        }
+    }
+
+    /// Flytter bildet i fokus til Papirkurven med en gang (⌫). Kan angres med ⌘Z.
+    func trashFocused() {
+        guard let i = selectedIndex, groups[i].photos.indices.contains(focusedIndex) else { return }
+        let photo = groups[i].photos[focusedIndex]
+        let result = TrashService.trash([photo])
+        guard let item = result.done.first else {
+            errorMessage = "Kunne ikke flytte bildet til Papirkurven: \(result.failed.first?.1.localizedDescription ?? "ukjent feil")"
+            return
+        }
+        undoStack.append(UndoRecord(groupID: groups[i].id, items: [item], previousStatus: groups[i].status, singlePhoto: true))
+        trashedCount += 1
+        trashedBytes += photo.fileSize
+        photos.removeAll { $0.url == photo.url }
+        groups[i].photos.remove(at: focusedIndex)
+        groups[i].selected.remove(photo.url)
+
+        if groups[i].photos.isEmpty {
+            let order = sidebarOrder
+            let pos = order.firstIndex { $0.id == groups[i].id } ?? 0
+            groups.remove(at: i)
+            let remaining = sidebarOrder
+            select(group: remaining.isEmpty ? nil : remaining[min(pos, remaining.count - 1)].id)
+            if remaining.isEmpty { showPreview = false }
+        } else {
+            focusedIndex = min(focusedIndex, groups[i].photos.count - 1)
+        }
+    }
+
+    private func rebuildSingles() {
+        let series = groups.filter { $0.kind == .series }
+        let inSeries = Set(series.flatMap { $0.photos.map(\.url) })
+        let singles = Self.singleGroups(photos.filter { !inSeries.contains($0.url) })
+        groups = (series + singles).sorted { $0.date < $1.date }
     }
 
     /// Angre skal bare gjelde det som er gjort i appen, og bare mens den kjører.
@@ -496,6 +545,7 @@ final class LibraryViewModel {
         case 36, 76:                                  // Enter (visningen holdes åpen og går til neste gruppe)
             requestConfirm(); return true
         case 49: toggleFocused(); return true         // mellomrom
+        case 51, 117: trashFocused(); return true     // ⌫ / forward delete
         case 53:                                      // Esc
             if showPreview { showPreview = false; return true }
             return false

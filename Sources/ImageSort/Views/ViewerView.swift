@@ -95,6 +95,13 @@ struct ViewerView: View {
                 Button("100 %") { model.zoom(.actualSize) }.help("Full størrelse (dobbeltklikk i bildet)")
             }
 
+            Button(role: .destructive) {
+                model.trashFocused()
+            } label: {
+                Label("Slett", systemImage: "trash")
+            }
+            .help("Flytt bildet til Papirkurven (⌫). ⌘Z angrer.")
+
             let inCollection = model.isInCollection(photo)
             Button {
                 model.toggleCollection(photo)
@@ -199,7 +206,7 @@ struct ViewerView: View {
                 }
             }
             HStack {
-                Text("←→ bla · V kun valgte · mellomrom behold/ikke · K samling · +/− zoom · 0 tilpass · dobbeltklikk 100 % · ↩ bekreft og neste gruppe · Esc lukk")
+                Text("←→ bla · ⌫ slett · V kun valgte · mellomrom behold/ikke · K samling · +/− zoom · 0 tilpass · dobbeltklikk 100 % · ↩ bekreft og neste gruppe · Esc lukk")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if group.isReviewable {

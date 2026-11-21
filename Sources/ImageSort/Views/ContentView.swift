@@ -103,7 +103,7 @@ struct ContentView: View {
             CollectionMenu()
             Button { model.undo() } label: { Label("Angre", systemImage: "arrow.uturn.backward") }
                 .disabled(!model.canUndo)
-                .help("Angre siste gruppe (⌘Z)")
+                .help("Angre siste sletting (⌘Z)")
             Button { model.chooseFolder() } label: { Label("Åpne mappe", systemImage: "folder") }
                 .help("Åpne mappe (⌘O)")
         }

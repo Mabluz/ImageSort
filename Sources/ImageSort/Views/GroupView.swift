@@ -168,13 +168,29 @@ struct PhotoCell: View {
     }
 
     @ViewBuilder private var selectionMark: some View {
-        if group.isReviewable {
-            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .font(.title2)
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(.white, isSelected ? Color.green : Color.black.opacity(0.35))
-                .padding(8)
+        HStack(spacing: 6) {
+            if isFocused || group.kind == .singles {
+                Button {
+                    model.focusedIndex = index
+                    model.trashFocused()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                        .background(.black.opacity(0.55), in: Circle())
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .help("Flytt dette bildet til Papirkurven (⌫). ⌘Z angrer.")
+            }
+            if group.isReviewable {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, isSelected ? Color.green : Color.black.opacity(0.35))
+            }
         }
+        .padding(8)
     }
 
     private var borderColor: Color {
@@ -205,7 +221,7 @@ struct ActionBar: View {
                         Label("Full visning", systemImage: "arrow.up.left.and.arrow.down.right")
                     }
                     .help("F")
-                    Label("Enkeltbilder slettes aldri her. Trykk K eller 📌 for å legge et bilde i samlingen.",
+                    Label("⌫ eller 🗑 flytter bildet til Papirkurven (⌘Z angrer). K eller 📌 legger det i samlingen.",
                           systemImage: "info.circle")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -246,7 +262,7 @@ struct ActionBar: View {
                         .foregroundStyle(.green)
                 }
                 Spacer()
-                Text("←→ flytt · mellomrom velg · 1–9 velg kun · ↩ bekreft · S hopp over · F full visning · K samling · C Claude · ↑↓ gruppe")
+                Text("←→ flytt · ⌫ slett bilde · mellomrom velg · 1–9 velg kun · ↩ bekreft · S hopp over · F full visning · K samling · C Claude · ↑↓ gruppe")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)

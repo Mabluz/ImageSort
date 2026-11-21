@@ -34,7 +34,7 @@ struct ImageSortApp: App {
                     .keyboardShortcut("o")
             }
             CommandGroup(replacing: .undoRedo) {
-                Button("Angre siste gruppe") { model.undo() }
+                Button("Angre siste sletting") { model.undo() }
                     .keyboardShortcut("z")
                     .disabled(!model.canUndo)
             }

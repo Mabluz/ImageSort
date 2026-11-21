@@ -10,7 +10,7 @@ En Mac-app for å rydde i bilder fort. Når du har tatt 5–10 bilder av samme m
 3. I hver gruppe er det beste bildet allerede valgt (⭐ *Forslag*). Juster om du vil, og trykk **Enter**.
 4. Er du usikker, trykker du **C** for å la Claude vurdere gruppen (se under).
 
-Bilder som ikke ligner noen andre, ligger under **Enkeltbilder** i sidefeltet, delt opp per måned. Der kan du bla, se i fullskjerm og merke bilder til en samling med K. Ingenting kan slettes derfra.
+Bilder som ikke ligner noen andre, ligger under **Enkeltbilder** i sidefeltet, delt opp per måned. Der kan du bla, se i fullskjerm og merke bilder til en samling med K. Med ⌫ eller 🗑 sletter du ett og ett bilde (⌘Z angrer).
 
 Analysene lagres, så det går mye raskere neste gang samme mappe åpnes.
 
@@ -26,8 +26,9 @@ Analysene lagres, så det går mye raskere neste gang samme mappe åpnes.
 | F | Fullskjerm med zoom (+/−, 0, dobbeltklikk = 100 %) |
 | V | I fullskjerm: bla kun mellom valgte bilder (bytt fram og tilbake) |
 | C | Spør Claude |
+| ⌫ | Flytt bildet i fokus til Papirkurven med en gang (virker også for enkeltbilder) |
 | K | Kopier bildet til aktiv samling / fjern det igjen |
-| ⌘Z | Angre siste gruppe (legger bildene tilbake) |
+| ⌘Z | Angre siste sletting (gruppe eller enkeltbilde) |
 
 ## Samlinger (kalender, fotobok …)
 Velg **📌 Samling** i verktøylinjen og lag en mappe, for eksempel `Julekalender2026`. Trykk **K**, eller 📌 på bildet, så **kopieres** bildet dit med navnet
