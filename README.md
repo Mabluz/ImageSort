@@ -23,7 +23,18 @@ Analysene lagres, så det går mye raskere neste gang samme mappe åpnes.
 | S | Hopp over gruppen (behold alt) |
 | F | Forstørr / sammenlign med forslaget |
 | C | Spør Claude |
+| K | Kopier bildet til aktiv samling / fjern det igjen |
 | ⌘Z | Angre siste gruppe (legger bildene tilbake) |
+
+## Samlinger (kalender, fotobok …)
+Velg **📌 Samling** i verktøylinjen og lag en mappe, for eksempel `Julekalender2026`. Trykk **K**, eller 📌 på bildet, så **kopieres** bildet dit med navnet
+
+```
+Julekalender2026_2026-11-21_16-44-18_20261121_164418.jpg
+<samling>_<opptaksdato>_<originalt filnavn>
+```
+
+Originalen røres ikke. Trykker du K igjen, flyttes kopien til Papirkurven. Merkede bilder blir automatisk valgt som «behold». Merkingen leses fra mappen selv, så den huskes mellom gangene. Du kan bytte mellom flere samlinger i menyen.
 
 ## Installere
 Krever macOS 15 eller nyere og Xcode (eller Command Line Tools). Du trenger **ikke** betalt Apple Developer-konto.

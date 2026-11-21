@@ -80,6 +80,17 @@ struct ViewerView: View {
                 Button("100 %") { model.zoom(.actualSize) }.help("Full størrelse (dobbeltklikk i bildet)")
             }
 
+            let inCollection = model.isInCollection(photo)
+            Button {
+                model.toggleCollection(photo)
+            } label: {
+                Label(inCollection ? "I \(model.collectionName ?? "")" : (model.collectionName.map { "Legg i \($0)" } ?? "Legg i samling …"),
+                      systemImage: inCollection ? "pin.fill" : "pin")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(inCollection ? .orange : .gray)
+            .help("K – kopier bildet til samlingen (navn: samling_dato_filnavn)")
+
             if group.status == .pending {
                 Button {
                     model.toggle(photo.url)
@@ -146,6 +157,13 @@ struct ViewerView: View {
                                             .foregroundStyle(.white, .green).padding(3)
                                     }
                                 }
+                                .overlay(alignment: .bottomLeading) {
+                                    if model.isInCollection(p) {
+                                        Image(systemName: "pin.fill").font(.caption2)
+                                            .foregroundStyle(.white).padding(3)
+                                            .background(.orange, in: Circle()).padding(3)
+                                    }
+                                }
                                 .overlay(alignment: .topLeading) {
                                     if p.url == group.suggested {
                                         Image(systemName: "star.fill").font(.caption2)
@@ -163,7 +181,7 @@ struct ViewerView: View {
                 }
             }
             HStack {
-                Text("←→ bla · mellomrom behold/ikke · +/− zoom · 0 tilpass · dobbeltklikk 100 % · ↩ bekreft og neste gruppe · Esc lukk")
+                Text("←→ bla · mellomrom behold/ikke · K samling · +/− zoom · 0 tilpass · dobbeltklikk 100 % · ↩ bekreft og neste gruppe · Esc lukk")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 if group.status == .pending {

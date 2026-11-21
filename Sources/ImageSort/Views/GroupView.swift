@@ -72,6 +72,7 @@ struct PhotoCell: View {
     let isFocused: Bool
 
     private var isSelected: Bool { group.selected.contains(photo.url) }
+    private var inCollection: Bool { model.isInCollection(photo) }
     private var score: PhotoScore? { group.scores[photo.url] }
     private var dimmed: Bool { group.status == .pending && !isSelected }
 
@@ -82,6 +83,25 @@ struct PhotoCell: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .topLeading) { badges }
                 .overlay(alignment: .topTrailing) { selectionMark }
+                .overlay(alignment: .bottomLeading) {
+                    Button { model.toggleCollection(photo) } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: inCollection ? "pin.fill" : "pin")
+                            if inCollection, let name = model.collectionName {
+                                Text(name).lineLimit(1)
+                            }
+                        }
+                        .font(.callout.weight(.semibold))
+                        .padding(.horizontal, inCollection ? 10 : 0)
+                        .frame(minWidth: 30, minHeight: 30)
+                        .background(inCollection ? Color.orange : Color.black.opacity(0.55), in: Capsule())
+                        .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(8)
+                    .help(inCollection ? "Fjern fra «\(model.collectionName ?? "")» (K)"
+                          : model.collectionName.map { "Kopier til «\($0)» (K)" } ?? "Velg en samling og kopier bildet dit (K)")
+                }
                 .overlay(alignment: .bottomTrailing) {
                     Button { model.openViewer(at: index) } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -217,7 +237,7 @@ struct ActionBar: View {
                         .foregroundStyle(.green)
                 }
                 Spacer()
-                Text("←→ flytt · mellomrom velg · 1–9 velg kun · ↩ bekreft · S hopp over · F full visning · C Claude · ↑↓ gruppe")
+                Text("←→ flytt · mellomrom velg · 1–9 velg kun · ↩ bekreft · S hopp over · F full visning · K samling · C Claude · ↑↓ gruppe")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)

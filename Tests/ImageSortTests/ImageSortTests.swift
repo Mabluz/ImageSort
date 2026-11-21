@@ -147,3 +147,33 @@ import Foundation
         #expect(Sharpness.laplacianVariance(gray: px, width: 10, height: 10) > 1000)
     }
 }
+
+@Suite struct CollectionTests {
+    @Test func fileNameHasCollectionDateAndOriginalName() {
+        var c = DateComponents(); c.year = 2026; c.month = 11; c.day = 21; c.hour = 16; c.minute = 44; c.second = 18
+        let date = Calendar.current.date(from: c)!
+        #expect(CollectionService.fileName(collection: "Julekalender2026", captureDate: date, originalName: "20261121_164418.jpg")
+                == "Julekalender2026_2026-11-21_16-44-18_20261121_164418.jpg")
+        #expect(CollectionService.fileName(collection: "Bok 2026/vår", captureDate: date, originalName: "a.heic")
+                == "Bok 2026-vår_2026-11-21_16-44-18_a.heic")
+    }
+
+    @Test func addAndRemoveCopy() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("imagesort-col-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let src = root.appendingPathComponent("bilder/IMG_1.jpg")
+        try FileManager.default.createDirectory(at: src.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: src)
+        let folder = root.appendingPathComponent("Julekalender2026")
+        let photo = Photo(url: src, captureDate: Date(timeIntervalSince1970: 0), fileSize: 1, modificationDate: .now)
+
+        try CollectionService.add(photo, to: folder)
+        try CollectionService.add(photo, to: folder) // idempotent
+        let name = CollectionService.fileName(for: photo, in: folder)
+        #expect(CollectionService.existingNames(in: folder) == [name])
+        #expect(FileManager.default.fileExists(atPath: src.path), "originalen skal ikke røres")
+
+        try CollectionService.remove(photo, from: folder)
+        #expect(CollectionService.existingNames(in: folder).isEmpty)
+    }
+}

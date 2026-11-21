@@ -8,6 +8,8 @@ enum Settings {
     static let claudeModelKey = "claudeModel"
     static let preselectKey = "preselectBest"
     static let confirmedOnceKey = "confirmedTrashOnce"
+    static let collectionKey = "activeCollectionPath"
+    static let recentCollectionsKey = "recentCollectionPaths"
 
     static let defaultTimeGap = 90.0
     /// Kalibrert på ekte serier: samme motiv ~0.1–0.4, annet motiv i samme rom ~0.64+.
@@ -64,6 +66,23 @@ final class LibraryViewModel {
     /// Bilder i grupper som er ferdig behandlet (tas ikke med ved ny gruppering).
     private var reviewed: Set<URL> = []
     private var loadTask: Task<Void, Never>?
+
+    // MARK: Samling (f.eks. «Julekalender2026»)
+    private(set) var collectionURL: URL?
+    private(set) var recentCollections: [URL] = []
+    private(set) var collectionNames: Set<String> = []
+    var collectionName: String? { collectionURL?.lastPathComponent }
+
+    init() {
+        let d = UserDefaults.standard
+        recentCollections = (d.stringArray(forKey: Settings.recentCollectionsKey) ?? [])
+            .map { URL(fileURLWithPath: $0) }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+        if let path = d.string(forKey: Settings.collectionKey), FileManager.default.fileExists(atPath: path) {
+            collectionURL = URL(fileURLWithPath: path)
+            refreshCollection()
+        }
+    }
 
     var canUndo: Bool { !undoStack.isEmpty }
     var pendingGroups: [PhotoGroup] { groups.filter { $0.status == .pending } }
@@ -205,6 +224,80 @@ final class LibraryViewModel {
     func openViewer(at index: Int? = nil) {
         if let index { focusedIndex = index }
         showPreview = true
+    }
+
+    // MARK: - Samlinger
+
+    /// Velg eller opprett en mappe som utvalgte bilder kopieres inn i.
+    func chooseCollection() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Bruk denne mappen"
+        panel.message = "Velg eller lag en mappe for samlingen, f.eks. «Julekalender2026». Merkede bilder kopieres hit."
+        if panel.runModal() == .OK, let url = panel.url { setCollection(url) }
+    }
+
+    func setCollection(_ url: URL?) {
+        collectionURL = url
+        let d = UserDefaults.standard
+        d.set(url?.path, forKey: Settings.collectionKey)
+        if let url {
+            recentCollections.removeAll { $0.standardizedFileURL == url.standardizedFileURL }
+            recentCollections.insert(url, at: 0)
+            recentCollections = Array(recentCollections.prefix(8))
+            d.set(recentCollections.map(\.path), forKey: Settings.recentCollectionsKey)
+        }
+        refreshCollection()
+    }
+
+    func refreshCollection() {
+        collectionNames = collectionURL.map { CollectionService.existingNames(in: $0) } ?? []
+    }
+
+    func isInCollection(_ photo: Photo) -> Bool {
+        guard let folder = collectionURL else { return false }
+        return collectionNames.contains(CollectionService.fileName(for: photo, in: folder))
+    }
+
+    /// Antall filer i samlingsmappen.
+    var collectionCount: Int { collectionNames.filter { !$0.hasPrefix(".") }.count }
+
+    func toggleCollection(_ photo: Photo) {
+        guard let folder = collectionURL else { chooseCollection(); if collectionURL != nil { toggleCollection(photo) }; return }
+        let name = CollectionService.fileName(for: photo, in: folder)
+        let adding = !collectionNames.contains(name)
+        // Oppdater med en gang, kopier i bakgrunnen (filer i Dropbox kan måtte lastes ned først).
+        if adding {
+            collectionNames.insert(name)
+            if let i = selectedIndex, groups[i].photos.contains(photo), groups[i].status == .pending {
+                groups[i].selected.insert(photo.url)  // merkede bilder skal aldri slettes ved en feil
+            }
+        } else {
+            collectionNames.remove(name)
+        }
+        Task.detached {
+            do {
+                if adding { try CollectionService.add(photo, to: folder) } else { try CollectionService.remove(photo, from: folder) }
+            } catch {
+                await MainActor.run {
+                    self.refreshCollection()
+                    self.errorMessage = "Kunne ikke \(adding ? "kopiere bildet til" : "fjerne bildet fra") «\(folder.lastPathComponent)»: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+
+    func toggleCollectionFocused() {
+        guard let g = selectedGroup, g.photos.indices.contains(focusedIndex) else { return }
+        toggleCollection(g.photos[focusedIndex])
+    }
+
+    func revealCollection() {
+        guard let url = collectionURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     // MARK: - Bekreft / hopp over / angre
@@ -361,6 +454,7 @@ final class LibraryViewModel {
             guard showPreview else { return false }
             zoom(ch == "-" ? .zoomOut : ch == "0" ? .fit : .zoomIn); return true
         case "c": askClaude(); return true
+        case "k": toggleCollectionFocused(); return true
         default: return false
         }
     }

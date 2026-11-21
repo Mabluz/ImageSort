@@ -31,6 +31,9 @@ struct ContentView: View {
                 model.open(URL(fileURLWithPath: args[i + 1]))
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            model.refreshCollection()
+        }
         .onChange(of: timeGap) { model.regroup() }
         .onChange(of: threshold) { model.regroup() }
         .overlay {
@@ -97,6 +100,7 @@ struct ContentView: View {
                 Text("\(model.trashedCount) slettet · \(ByteCountFormatter.string(fromByteCount: model.trashedBytes, countStyle: .file)) frigjort")
                     .foregroundStyle(.secondary)
             }
+            CollectionMenu()
             Button { model.undo() } label: { Label("Angre", systemImage: "arrow.uturn.backward") }
                 .disabled(!model.canUndo)
                 .help("Angre siste gruppe (⌘Z)")
@@ -209,5 +213,42 @@ struct EmptyStateView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Velger hvilken samling (mappe) merkede bilder kopieres til.
+struct CollectionMenu: View {
+    @Environment(LibraryViewModel.self) private var model
+
+    var body: some View {
+        Menu {
+            if !model.recentCollections.isEmpty {
+                Section("Samlinger") {
+                    ForEach(model.recentCollections, id: \.self) { url in
+                        Button {
+                            model.setCollection(url)
+                        } label: {
+                            if url == model.collectionURL {
+                                Label(url.lastPathComponent, systemImage: "checkmark")
+                            } else {
+                                Text(url.lastPathComponent)
+                            }
+                        }
+                    }
+                }
+            }
+            Button("Velg eller lag ny samling …") { model.chooseCollection() }
+            if model.collectionURL != nil {
+                Button("Vis «\(model.collectionName ?? "")» i Finder") { model.revealCollection() }
+                Button("Ingen samling") { model.setCollection(nil) }
+            }
+        } label: {
+            if let name = model.collectionName {
+                Label("\(name) (\(model.collectionCount))", systemImage: "pin.fill")
+            } else {
+                Label("Samling", systemImage: "pin")
+            }
+        }
+        .help("Merk bilder med K for å kopiere dem til samlingen (f.eks. til kalender eller fotobok)")
     }
 }
