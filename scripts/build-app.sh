@@ -1,10 +1,11 @@
 #!/bin/bash
-# Bygger ImageSort.app. Bruk:  scripts/build-app.sh            (bygger til build/)
+# Bygger ImageSort.app. Bruk:  scripts/build-app.sh            (bygger til build.noindex/)
 #                              scripts/build-app.sh --install  (installerer i /Applications)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-APP="build/ImageSort.app"
+# «.noindex» gjør at Spotlight ikke viser denne kopien i tillegg til den i Programmer.
+APP="build.noindex/ImageSort.app"
 echo "▸ Bygger (release) …"
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)/ImageSort"
