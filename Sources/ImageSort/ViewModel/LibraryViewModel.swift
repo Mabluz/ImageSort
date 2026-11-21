@@ -47,6 +47,7 @@ final class LibraryViewModel {
     var selectedGroupID: UUID?
     var focusedIndex = 0
     var showPreview = false
+    var zoomCommand: ZoomCommand?
     var errorMessage: String?
     var claudeBusy: Set<UUID> = []
     var pendingConfirmGroupID: UUID?
@@ -199,6 +200,13 @@ final class LibraryViewModel {
         focusedIndex = index
     }
 
+    func zoom(_ action: ZoomAction) { zoomCommand = ZoomCommand(action: action) }
+
+    func openViewer(at index: Int? = nil) {
+        if let index { focusedIndex = index }
+        showPreview = true
+    }
+
     // MARK: - Bekreft / hopp over / angre
 
     /// Kalles fra Enter / knapp. Viser bekreftelse første gang.
@@ -335,8 +343,7 @@ final class LibraryViewModel {
         case 124: moveFocus(1); return true           // →
         case 126: moveGroup(-1); return true          // ↑
         case 125: moveGroup(1); return true           // ↓
-        case 36, 76:                                  // Enter
-            if showPreview { showPreview = false }
+        case 36, 76:                                  // Enter (visningen holdes åpen og går til neste gruppe)
             requestConfirm(); return true
         case 49: toggleFocused(); return true         // mellomrom
         case 53:                                      // Esc
@@ -350,6 +357,9 @@ final class LibraryViewModel {
             selectOnly(index: Int(ch)! - 1); return true
         case "s": skip(); return true
         case "f": showPreview.toggle(); return true
+        case "+", "=", "-", "0":
+            guard showPreview else { return false }
+            zoom(ch == "-" ? .zoomOut : ch == "0" ? .fit : .zoomIn); return true
         case "c": askClaude(); return true
         default: return false
         }

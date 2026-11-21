@@ -33,10 +33,13 @@ struct ContentView: View {
         }
         .onChange(of: timeGap) { model.regroup() }
         .onChange(of: threshold) { model.regroup() }
-        .sheet(isPresented: $model.showPreview) {
-            PreviewView()
-                .environment(model)
+        .overlay {
+            if model.showPreview {
+                ViewerView()
+                    .transition(.opacity)
+            }
         }
+        .animation(.easeOut(duration: 0.12), value: model.showPreview)
         .alert("Flytte uvalgte bilder til Papirkurven?", isPresented: Binding(
             get: { model.pendingConfirmGroupID != nil },
             set: { if !$0 { model.pendingConfirmGroupID = nil } }

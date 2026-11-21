@@ -44,10 +44,7 @@ struct GroupView: View {
                                 isFocused: index == model.focusedIndex
                             )
                             .id(photo.id)
-                            .onTapGesture(count: 2) {
-                                model.focusedIndex = index
-                                model.showPreview = true
-                            }
+                            .onTapGesture(count: 2) { model.openViewer(at: index) }
                             .onTapGesture {
                                 model.focusedIndex = index
                                 if group.status == .pending { model.toggle(photo.url) }
@@ -68,6 +65,7 @@ struct GroupView: View {
 }
 
 struct PhotoCell: View {
+    @Environment(LibraryViewModel.self) private var model
     let photo: Photo
     let index: Int
     let group: PhotoGroup
@@ -84,6 +82,18 @@ struct PhotoCell: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .topLeading) { badges }
                 .overlay(alignment: .topTrailing) { selectionMark }
+                .overlay(alignment: .bottomTrailing) {
+                    Button { model.openViewer(at: index) } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 30, height: 30)
+                            .background(.black.opacity(0.55), in: Circle())
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(8)
+                    .help("Vis i full størrelse med zoom (F eller dobbeltklikk)")
+                }
                 .overlay {
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(borderColor, lineWidth: isSelected || isFocused ? 4 : 0)
@@ -184,6 +194,11 @@ struct ActionBar: View {
 
                     Button("Hopp over") { model.skip() }.help("S")
 
+                    Button { model.openViewer() } label: {
+                        Label("Full visning", systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
+                    .help("F")
+
                     Button {
                         model.askClaude()
                     } label: {
@@ -202,7 +217,7 @@ struct ActionBar: View {
                         .foregroundStyle(.green)
                 }
                 Spacer()
-                Text("←→ flytt · mellomrom velg · 1–9 velg kun · ↩ bekreft · S hopp over · F forstørr · C Claude · ↑↓ gruppe")
+                Text("←→ flytt · mellomrom velg · 1–9 velg kun · ↩ bekreft · S hopp over · F full visning · C Claude · ↑↓ gruppe")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
